@@ -13,7 +13,7 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
     private const val PENDING = "pending"
     private const val SETTINGS = "settings"
     private const val SENDER_SUGGESTIONS = "sender_suggestions"
-    private const val MAX_SUGGESTIONS_PER_APP = 30
+    private const val MAX_SUGGESTIONS_PER_APP = 100
     private const val MAX_APPS_WITH_SUGGESTIONS = 40
 
     private val lock = Any()
@@ -64,11 +64,11 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
 
         val current = mutableConfig.value.senderSuggestions
         val existing = current[packageName].orEmpty()
-        if (existing.any { it.equals(suggestion, ignoreCase = true) }) return
+        if (existing.firstOrNull()?.equals(suggestion, ignoreCase = true) == true) return
 
         val suggestions = current.toMutableMap().apply {
             remove(packageName)
-            put(packageName, (listOf(suggestion) + existing).take(MAX_SUGGESTIONS_PER_APP))
+            put(packageName, (listOf(suggestion) + existing.filterNot { it.equals(suggestion, ignoreCase = true) }).take(MAX_SUGGESTIONS_PER_APP))
             while (size > MAX_APPS_WITH_SUGGESTIONS) {
                 remove(keys.first())
             }

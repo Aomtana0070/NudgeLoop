@@ -272,10 +272,10 @@ object ReminderEngine {
     private fun postReminder(context: Context, reminder: PendingReminder, settings: ReminderSettings, onlyAlertOnce: Boolean = false): Boolean {
         val manager = NotificationManagerCompat.from(context)
         if (!canDisplayNotifications(context)) return false
-        val title = if (reminder.sender.isBlank()) "${reminder.appLabel} · ยังรอการตอบกลับ"
-        else "${reminder.appLabel} · ${reminder.sender}"
+        val title = reminder.sender.ifBlank { reminder.appLabel }
         val repeatCount = reminder.maxRepeats?.let { "${reminder.sentRepeats}/$it" } ?: "${reminder.sentRepeats}/∞"
-        val body = reminder.preview.ifBlank { "มีการแจ้งเตือนที่ยังไม่ได้จัดการ · ครั้งที่ $repeatCount" }
+        val status = "จาก ${reminder.appLabel} · เตือนครั้งที่ $repeatCount"
+        val body = reminder.preview.takeIf(String::isNotBlank)?.let { "$status · $it" } ?: status
         val openIntent = Intent(context, OpenReminderReceiver::class.java).apply {
             action = ACTION_OPEN
             data = Uri.parse("renotify://open/${stableId(reminder.key)}")
@@ -302,6 +302,7 @@ object ReminderEngine {
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setSubText(reminder.appLabel)
             .setCategory(Notification.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)

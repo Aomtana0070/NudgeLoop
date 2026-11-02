@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
                     onOpenNotificationAccess = ::openNotificationAccess,
                     onOpenAppNotificationSettings = ::openAppNotificationSettings,
                     onOpenExactAlarmSettings = ::openExactAlarmSettings,
+                    onOpenBackgroundSettings = ::openBackgroundSettings,
                 )
             }
         }
@@ -70,5 +71,11 @@ class MainActivity : ComponentActivity() {
             .onFailure {
                 startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
             }
+    }
+
+    private fun openBackgroundSettings() {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+            runCatching { startActivity(intent) }
+                .onFailure { startActivity(Intent(Settings.ACTION_SETTINGS)) }
     }
 }

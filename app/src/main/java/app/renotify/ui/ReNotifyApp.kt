@@ -193,6 +193,7 @@ fun ReNotifyApp(
     onOpenNotificationAccess: () -> Unit,
     onOpenAppNotificationSettings: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
+    onOpenBackgroundSettings: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var destination by remember { mutableStateOf(Destination.Home) }
@@ -265,6 +266,7 @@ fun ReNotifyApp(
                         onRequestNotificationPermission,
                         onOpenAppNotificationSettings,
                         onOpenExactAlarmSettings,
+                        onOpenBackgroundSettings,
                         onSaveSettings = viewModel::saveSettings,
                         onDemo = viewModel::demoReminder,
                     )
@@ -309,7 +311,7 @@ private fun HomeScreen(
                 Icon(Icons.Outlined.NotificationsActive, contentDescription = null, modifier = Modifier.size(34.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(if (permissions.notificationAccess && permissions.postNotifications && permissions.appNotificationsEnabled) "พร้อมเตือนซ้ำ" else "ตั้งค่าให้ครบก่อน", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(if (permissions.notificationAccess && permissions.postNotifications && permissions.appNotificationsEnabled && permissions.exactAlarms) "พร้อมเตือนซ้ำ" else "ตั้งค่าให้ครบก่อน", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Text("$enabledRules แอปที่เปิดอยู่ · ${pending.count { !it.demo }} รายการกำลังรอ", color = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
             }
@@ -475,6 +477,7 @@ private fun GuideScreen(
     onRequestNotificationPermission: () -> Unit,
     onOpenAppNotificationSettings: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
+    onOpenBackgroundSettings: () -> Unit,
     onSaveSettings: (ReminderSettings) -> Unit,
     onDemo: () -> Unit,
 ) {
@@ -487,7 +490,10 @@ private fun GuideScreen(
         NumberedStep("1", "อนุญาตให้ NudgeLoop อ่านการแจ้งเตือน", "ใช้ชื่อแอปและชื่อผู้ส่งเพื่อเลือกกฎ และตรวจเมื่อการแจ้งเตือนต้นทางถูกปิด", permissions.notificationAccess, onOpenNotificationAccess)
         NumberedStep("2", "อนุญาตการแจ้งเตือนของ NudgeLoop", "จำเป็นสำหรับการส่งการเตือนซ้ำบน Android 13 ขึ้นไป", permissions.postNotifications, onRequestNotificationPermission)
         NumberedStep("3", "เปิดช่องทางแจ้งเตือนของ NudgeLoop", "ถ้าปิดแอปหรือช่องเตือนซ้ำไว้ Android จะไม่แสดงการเตือน", permissions.appNotificationsEnabled, onOpenAppNotificationSettings)
-        NumberedStep("4", "เพิ่มความแม่นยำของเวลา", "ไม่เปิดก็ใช้ได้ แต่อาจถูกเลื่อนโดยโหมดประหยัดพลังงาน", permissions.exactAlarms, onOpenExactAlarmSettings)
+        NumberedStep("4", "อนุญาตนาฬิกาปลุกที่แม่นยำ", "ถ้าไม่อนุญาต Android 12 ขึ้นไปอาจเลื่อนเวลาได้ถึงประมาณ 1 ชั่วโมง", permissions.exactAlarms, onOpenExactAlarmSettings)
+        InfoRow(Icons.Outlined.Bedtime, "ทำงานเมื่อปิดหน้าจอ", "การปัด NudgeLoop ออกจากหน้ารายการแอปไม่ควรหยุด AlarmManager แต่การบังคับหยุดจะบล็อกงานจนกว่าจะเปิดแอปอีกครั้ง")
+        Text("ถ้ายังไม่เตือนเมื่อปิดแอป ให้เปิดข้อมูลแอปด้านล่าง แล้วตั้งค่าแบตเตอรี่เป็นไม่จำกัด/อนุญาตทำงานเบื้องหลัง (ชื่อเมนูขึ้นกับยี่ห้อ)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(onClick = onOpenBackgroundSettings) { Text("ตั้งค่าแบตเตอรี่และการทำงานเบื้องหลัง") }
         Text("แตะชื่อขั้นตอนเพื่อเปิดหน้าตั้งค่าที่เกี่ยวข้อง", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         SectionTitle("ตั้งค่าขั้นสูง")
@@ -547,9 +553,9 @@ private fun RuleEditorDialog(
     var exact by remember(app.packageName, initialRule) { mutableStateOf(initialRule.exactSenderMatch) }
     var error by remember { mutableStateOf<String?>(null) }
     val matchingSuggestions = senderSuggestions
-        .filter { it.startsWith(senderQuery.trim(), ignoreCase = true) }
+        .filter { senderQuery.isBlank() || it.contains(senderQuery.trim(), ignoreCase = true) }
         .filterNot { suggestion -> senders.any { it.equals(suggestion, ignoreCase = true) } }
-        .take(5)
+        .take(if (senderQuery.isBlank()) 6 else 8)
 
     fun addSender(value: String = senderQuery) {
         val name = value.trim().take(80)
@@ -587,6 +593,18 @@ private fun RuleEditorDialog(
                             )
                         }
                     }
+                    if (senderQuery.isBlank() && matchingSuggestions.isNotEmpty()) {
+                        Text("ผู้ส่งที่พบล่าสุด", style = MaterialTheme.typography.labelLarge)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            matchingSuggestions.forEach { suggestion ->
+                                InputChip(
+                                    selected = false,
+                                    onClick = { addSender(suggestion) },
+                                    label = { Text(suggestion, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                )
+                            }
+                        }
+                    }
                 }
                 Box {
                     OutlinedTextField(
@@ -621,7 +639,7 @@ private fun RuleEditorDialog(
                         }
                     }
                 }
-                Text("คำแนะนำมาจากชื่อหัวข้อแจ้งเตือนที่พบขณะเปิดสิทธิ์อ่านการแจ้งเตือน และเก็บไว้ในเครื่อง", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("ค้นหาได้จากทุกส่วนของชื่อหัวข้อแจ้งเตือน คำแนะนำเก็บไว้ในเครื่องและแสดงล่าสุดสูงสุด 6 รายชื่อ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = exact, onCheckedChange = { exact = it })
                     Text(if (exact) "ตรงกับชื่อทั้งหมด" else "มีชื่อที่เลือกอยู่ในหัวข้อก็พอ")
