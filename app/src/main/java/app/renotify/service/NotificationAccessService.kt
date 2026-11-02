@@ -20,6 +20,7 @@ class NotificationAccessService : NotificationListenerService() {
             Log.w(TAG, "Unable to read active notifications; keeping pending reminders", error)
             return
         }
+        Log.i(TAG, "Notification listener connected; inspecting ${active.size} active notifications")
         val keys = active.asSequence()
             .filterNot { it.packageName == packageName }
             .map(StatusBarNotification::getKey)
@@ -34,13 +35,20 @@ class NotificationAccessService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.packageName != packageName) synchronized(activeOriginalKeys) { activeOriginalKeys.add(sbn.key) }
+        Log.d(TAG, "Notification posted by ${sbn.packageName}")
         inspect(sbn)
     }
 
     private fun inspect(sbn: StatusBarNotification) {
         if (sbn.packageName == packageName) return
-        if ((sbn.notification.flags and android.app.Notification.FLAG_ONGOING_EVENT) != 0) return
-        if ((sbn.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY) != 0) return
+        if ((sbn.notification.flags and android.app.Notification.FLAG_ONGOING_EVENT) != 0) {
+            Log.d(TAG, "Ignoring ongoing notification from ${sbn.packageName}")
+            return
+        }
+        if ((sbn.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY) != 0) {
+            Log.d(TAG, "Ignoring group summary from ${sbn.packageName}")
+            return
+        }
 
         val title = sbn.notification.extras
             .getCharSequence(android.app.Notification.EXTRA_TITLE)
@@ -55,7 +63,11 @@ class NotificationAccessService : NotificationListenerService() {
 
         val config = RuleStore.config.value
         val rule = config.rules[sbn.packageName]?.takeIf { it.enabled } ?: return
-        if (!RuleMatcher.matchesSender(rule, title)) return
+        if (!RuleMatcher.matchesSender(rule, title)) {
+            Log.d(TAG, "Notification from ${sbn.packageName} did not match its sender rule")
+            return
+        }
+        Log.i(TAG, "Matched notification from ${sbn.packageName}; scheduling reminder")
         sbn.notification.contentIntent?.let { contentIntents[sbn.key] = it }
             ?: contentIntents.remove(sbn.key)
         ReminderEngine.startFromNotification(this, sbn.key, sbn.packageName, title, body.take(500))
@@ -72,6 +84,7 @@ class NotificationAccessService : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        Log.w(TAG, "Notification listener disconnected; requesting rebind")
         if (instance?.get() === this) instance = null
         synchronized(activeOriginalKeys) { activeOriginalKeys.clear() }
         NotificationListenerService.requestRebind(ComponentName(this, NotificationAccessService::class.java))
@@ -94,6 +107,7 @@ class NotificationAccessService : NotificationListenerService() {
             if (!hasNotificationAccess(context)) return
             val service = instance?.get()
             if (service == null) {
+                Log.i(TAG, "Notification listener is not connected; requesting rebind")
                 NotificationListenerService.requestRebind(ComponentName(context, NotificationAccessService::class.java))
             } else {
                 val active = try {
@@ -103,6 +117,7 @@ class NotificationAccessService : NotificationListenerService() {
                     return
                 }
                 val original = active.filterNot { it.packageName == context.packageName }
+                Log.i(TAG, "Refreshing ${original.size} active notifications")
                 ReminderEngine.restoreAfterListenerConnect(context, original.map(StatusBarNotification::getKey).toSet())
                 original.forEach(service::inspect)
             }

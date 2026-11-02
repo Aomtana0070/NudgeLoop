@@ -1,6 +1,7 @@
 package app.renotify.data
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -36,5 +37,10 @@ class RuleMatcherTest {
         assertTrue(ReminderPolicy.shouldRepeat(0, null))
         assertTrue(ReminderPolicy.shouldRepeat(100_000, null))
         assertFalse(ReminderPolicy.shouldRepeat(3, 3))
+    }
+
+    @Test
+    fun failedReminderDeliveryIsRetriedAfterFifteenMinutes() {
+        assertEquals(901_000L, ReminderPolicy.retryAt(1_000L))
     }
 }

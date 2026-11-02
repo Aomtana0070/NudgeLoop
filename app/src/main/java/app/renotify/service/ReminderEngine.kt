@@ -44,7 +44,7 @@ object ReminderEngine {
     fun createChannelsForApp(context: Context) = createChannels(context)
 
     fun startFromNotification(context: Context, key: String, packageName: String, title: String, body: String) {
-        if (!hasNotificationAccess(context) || !hasPostPermission(context)) return
+        if (!hasNotificationAccess(context)) return
         val config = RuleStore.config.value
         val rule = config.rules[packageName]?.takeIf(AppRule::enabled) ?: return
         val sender = title.trim()
@@ -87,7 +87,9 @@ object ReminderEngine {
     fun deliver(context: Context, key: String) {
         val config = RuleStore.config.value
         val reminder = config.pending.firstOrNull { it.key == key } ?: return
+        Log.i(TAG, "Reminder alarm fired: $key")
         if (!reminder.demo && NotificationAccessService.isOriginalActive(key) == false) {
+            Log.i(TAG, "Source notification is no longer active; stopping reminder: $key")
             cancel(context, key)
             return
         }
@@ -96,11 +98,11 @@ object ReminderEngine {
             return
         }
 
-        if ((!reminder.demo && !hasNotificationAccess(context)) || !hasPostPermission(context) ||
-            !canDisplayNotifications(context)
-        ) {
-            Log.w(TAG, "Cannot display reminder; keeping it pending until permissions are restored: $key")
-            RuleStore.putPending(context, reminder.copy(nextAtMillis = System.currentTimeMillis()))
+        val canReadSource = reminder.demo || hasNotificationAccess(context)
+        val canPost = hasPostPermission(context) && canDisplayNotifications(context)
+        if (!canReadSource || !canPost) {
+            Log.w(TAG, "Reminder permissions are unavailable; retrying later: $key")
+            deferAndRetry(context, reminder)
             return
         }
 
@@ -116,8 +118,8 @@ object ReminderEngine {
         createChannels(context)
         val nextCount = reminder.sentRepeats + 1
         if (!postReminder(context, reminder.copy(sentRepeats = nextCount), config.settings)) {
-            Log.e(TAG, "Failed to post reminder; keeping it pending for retry: $key")
-            RuleStore.putPending(context, reminder.copy(nextAtMillis = System.currentTimeMillis()))
+            Log.e(TAG, "Failed to post reminder; retrying later: $key")
+            deferAndRetry(context, reminder)
             return
         }
         val updated = reminder.copy(
@@ -225,15 +227,30 @@ object ReminderEngine {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
         val triggerAt = maxOf(atMillis, System.currentTimeMillis() + 500L)
         val canUseExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
-        runCatching {
+        val scheduled = runCatching {
             if (canUseExact) alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
             else alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
-        }.onFailure {
-            runCatching { alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent) }
-                .onFailure { fallbackError ->
-                    Log.e(TAG, "Unable to schedule reminder alarm: ${reminder.key}", fallbackError)
-                }
+            true
+        }.onFailure { error ->
+            Log.w(TAG, "Exact reminder alarm could not be scheduled; trying an inexact alarm: ${reminder.key}", error)
+        }.getOrElse {
+            runCatching {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+                true
+            }.onFailure { fallbackError ->
+                Log.e(TAG, "Unable to schedule reminder alarm: ${reminder.key}", fallbackError)
+            }.getOrDefault(false)
         }
+        if (scheduled) {
+            Log.i(TAG, "Reminder alarm scheduled for $triggerAt (exact=$canUseExact): ${reminder.key}")
+        }
+    }
+
+    private fun deferAndRetry(context: Context, reminder: PendingReminder) {
+        val retryAt = ReminderPolicy.retryAt(System.currentTimeMillis())
+        val deferred = reminder.copy(nextAtMillis = retryAt)
+        RuleStore.putPending(context, deferred)
+        schedule(context, deferred, retryAt)
     }
 
     fun openOrStop(context: Context, key: String) {

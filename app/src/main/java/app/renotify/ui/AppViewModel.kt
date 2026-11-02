@@ -54,7 +54,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refresh() {
         val context = getApplication<Application>()
-        val previousPermissions = mutableState.value.permissions
         val postNotifications = Build.VERSION.SDK_INT < 33 ||
             context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
         val permissions = PermissionState(
@@ -64,8 +63,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             exactAlarms = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
                 context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms(),
         )
-        if (permissions.notificationAccess &&
-            (!previousPermissions.notificationAccess || (!previousPermissions.postNotifications && permissions.postNotifications))) {
+        if (permissions.notificationAccess) {
             NotificationAccessService.requestRefresh(context)
         }
         if (permissions.notificationAccess && permissions.postNotifications && permissions.appNotificationsEnabled) {
