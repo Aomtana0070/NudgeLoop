@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">NudgeLoop</string>
+    <string name="notification_access_label">NudgeLoop – อ่านการแจ้งเตือนเพื่อเตือนซ้ำ</string>
+</resources>

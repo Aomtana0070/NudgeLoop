@@ -1,0 +1,60 @@
+package app.renotify
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import app.renotify.ui.AppViewModel
+import app.renotify.ui.ReNotifyApp
+import app.renotify.ui.ReNotifyTheme
+
+class MainActivity : ComponentActivity() {
+    private val viewModel: AppViewModel by viewModels()
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        viewModel.refresh()
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            ReNotifyTheme {
+                ReNotifyApp(
+                    viewModel = viewModel,
+                    onRequestNotificationPermission = {
+                        if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        else viewModel.refresh()
+                    },
+                    onOpenNotificationAccess = ::openNotificationAccess,
+                    onOpenExactAlarmSettings = ::openExactAlarmSettings,
+                )
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.refresh()
+    }
+
+    private fun openNotificationAccess() {
+        runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+            .onFailure { startActivity(Intent(Settings.ACTION_SETTINGS)) }
+    }
+
+    private fun openExactAlarmSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val request = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).setData(Uri.parse("package:$packageName"))
+            runCatching { startActivity(request) }
+                .onFailure { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }
+        } else {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+        }
+    }
+}
