@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -17,6 +18,7 @@ import app.renotify.R
 import app.renotify.data.AppRule
 import app.renotify.data.PendingReminder
 import app.renotify.data.ReminderSettings
+import app.renotify.data.ReminderPolicy
 import app.renotify.data.RuleStore
 import app.renotify.data.RuleMatcher
 import java.security.MessageDigest
@@ -28,6 +30,16 @@ object ReminderEngine {
     private const val ACTION_REPEAT = "app.renotify.action.REPEAT"
     private const val ACTION_OPEN = "app.renotify.action.OPEN"
     private const val ACTION_STOP = "app.renotify.action.STOP"
+    private const val TAG = "ReminderEngine"
+
+    fun canDisplayNotifications(context: Context): Boolean {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+        val manager = context.getSystemService(NotificationManager::class.java)
+        return listOf(CHANNEL_SOUND, CHANNEL_SILENT).any { channelId ->
+            manager.getNotificationChannel(channelId)?.importance != NotificationManager.IMPORTANCE_NONE
+        }
+    }
 
     fun createChannelsForApp(context: Context) = createChannels(context)
 
@@ -79,13 +91,16 @@ object ReminderEngine {
             cancel(context, key)
             return
         }
-        if (reminder.sentRepeats >= reminder.maxRepeats) {
-            RuleStore.removePending(context, key)
+        if (!ReminderPolicy.shouldRepeat(reminder.sentRepeats, reminder.maxRepeats)) {
+            cancel(context, key)
             return
         }
 
-        if ((!reminder.demo && !hasNotificationAccess(context)) || !hasPostPermission(context)) {
-            cancel(context, key)
+        if ((!reminder.demo && !hasNotificationAccess(context)) || !hasPostPermission(context) ||
+            !canDisplayNotifications(context)
+        ) {
+            Log.w(TAG, "Cannot display reminder; keeping it pending until permissions are restored: $key")
+            RuleStore.putPending(context, reminder.copy(nextAtMillis = System.currentTimeMillis()))
             return
         }
 
@@ -100,10 +115,18 @@ object ReminderEngine {
 
         createChannels(context)
         val nextCount = reminder.sentRepeats + 1
-        postReminder(context, reminder.copy(sentRepeats = nextCount), config.settings)
+        if (!postReminder(context, reminder.copy(sentRepeats = nextCount), config.settings)) {
+            Log.e(TAG, "Failed to post reminder; keeping it pending for retry: $key")
+            RuleStore.putPending(context, reminder.copy(nextAtMillis = System.currentTimeMillis()))
+            return
+        }
         val updated = reminder.copy(
             sentRepeats = nextCount,
-            nextAtMillis = if (nextCount < reminder.maxRepeats) now + reminder.intervalMinutes * 60_000L else 0L,
+            nextAtMillis = if (ReminderPolicy.shouldRepeat(nextCount, reminder.maxRepeats)) {
+                now + reminder.intervalMinutes * 60_000L
+            } else {
+                0L
+            },
         )
         if (updated.demo && updated.nextAtMillis == 0L) {
             RuleStore.removePending(context, key)
@@ -138,13 +161,14 @@ object ReminderEngine {
             } else {
                 val updated = reminder.copy(
                     intervalMinutes = rule.intervalMinutes.coerceIn(1, 1440),
-                    maxRepeats = rule.maxRepeats.coerceIn(1, 20),
+                    maxRepeats = rule.maxRepeats?.coerceIn(1, 20),
                 )
-                if (updated.sentRepeats < updated.maxRepeats) {
+                if (ReminderPolicy.shouldRepeat(updated.sentRepeats, updated.maxRepeats)) {
                     val dueAt = System.currentTimeMillis() + updated.intervalMinutes * 60_000L
                     RuleStore.putPending(context, updated.copy(nextAtMillis = dueAt))
                     schedule(context, updated, dueAt)
                 } else {
+                    context.getSystemService(AlarmManager::class.java).cancel(alarmPendingIntent(context, reminder.key))
                     RuleStore.putPending(context, updated.copy(nextAtMillis = 0L))
                 }
             }
@@ -206,6 +230,9 @@ object ReminderEngine {
             else alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
         }.onFailure {
             runCatching { alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent) }
+                .onFailure { fallbackError ->
+                    Log.e(TAG, "Unable to schedule reminder alarm: ${reminder.key}", fallbackError)
+                }
         }
     }
 
@@ -225,12 +252,13 @@ object ReminderEngine {
         cancel(context, key)
     }
 
-    private fun postReminder(context: Context, reminder: PendingReminder, settings: ReminderSettings, onlyAlertOnce: Boolean = false) {
+    private fun postReminder(context: Context, reminder: PendingReminder, settings: ReminderSettings, onlyAlertOnce: Boolean = false): Boolean {
         val manager = NotificationManagerCompat.from(context)
-        if (!manager.areNotificationsEnabled()) return
+        if (!canDisplayNotifications(context)) return false
         val title = if (reminder.sender.isBlank()) "${reminder.appLabel} · ยังรอการตอบกลับ"
         else "${reminder.appLabel} · ${reminder.sender}"
-        val body = reminder.preview.ifBlank { "มีการแจ้งเตือนที่ยังไม่ได้จัดการ · ครั้งที่ ${reminder.sentRepeats}/${reminder.maxRepeats}" }
+        val repeatCount = reminder.maxRepeats?.let { "${reminder.sentRepeats}/$it" } ?: "${reminder.sentRepeats}/∞"
+        val body = reminder.preview.ifBlank { "มีการแจ้งเตือนที่ยังไม่ได้จัดการ · ครั้งที่ $repeatCount" }
         val openIntent = Intent(context, OpenReminderReceiver::class.java).apply {
             action = ACTION_OPEN
             data = Uri.parse("renotify://open/${stableId(reminder.key)}")
@@ -249,7 +277,9 @@ object ReminderEngine {
             context, stableId(reminder.key), stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val channel = if (settings.soundEnabled) CHANNEL_SOUND else CHANNEL_SILENT
+        val preferredChannel = if (settings.soundEnabled) CHANNEL_SOUND else CHANNEL_SILENT
+        val fallbackChannel = if (settings.soundEnabled) CHANNEL_SILENT else CHANNEL_SOUND
+        val channel = if (isChannelEnabled(context, preferredChannel)) preferredChannel else fallbackChannel
         val notification = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -263,8 +293,18 @@ object ReminderEngine {
             .addAction(0, "หยุดเตือน", stopPending)
             .setOnlyAlertOnce(onlyAlertOnce)
             .build()
-        runCatching { manager.notify(notificationId(reminder.key), notification) }
+        return runCatching {
+            manager.notify(notificationId(reminder.key), notification)
+            true
+        }.onFailure {
+            Log.e(TAG, "Unable to post reminder notification: ${reminder.key}", it)
+        }.getOrDefault(false)
     }
+
+    private fun isChannelEnabled(context: Context, channelId: String): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            context.getSystemService(NotificationManager::class.java)
+                .getNotificationChannel(channelId)?.importance != NotificationManager.IMPORTANCE_NONE
 
     private fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return

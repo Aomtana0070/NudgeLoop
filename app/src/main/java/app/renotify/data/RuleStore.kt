@@ -12,6 +12,9 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
     private const val RULES = "rules"
     private const val PENDING = "pending"
     private const val SETTINGS = "settings"
+    private const val SENDER_SUGGESTIONS = "sender_suggestions"
+    private const val MAX_SUGGESTIONS_PER_APP = 30
+    private const val MAX_APPS_WITH_SUGGESTIONS = 40
 
     private val lock = Any()
     private var preferences: SharedPreferences? = null
@@ -55,6 +58,27 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
         mutableConfig.value = mutableConfig.value.copy(settings = settings)
     }
 
+    fun rememberSenderSuggestion(context: Context, packageName: String, title: String) {
+        val suggestion = title.trim().take(80)
+        if (packageName.isBlank() || suggestion.isBlank()) return
+
+        val current = mutableConfig.value.senderSuggestions
+        val existing = current[packageName].orEmpty()
+        if (existing.any { it.equals(suggestion, ignoreCase = true) }) return
+
+        val suggestions = current.toMutableMap().apply {
+            remove(packageName)
+            put(packageName, (listOf(suggestion) + existing).take(MAX_SUGGESTIONS_PER_APP))
+            while (size > MAX_APPS_WITH_SUGGESTIONS) {
+                remove(keys.first())
+            }
+        }
+        prefs(context).edit()
+            .putString(SENDER_SUGGESTIONS, suggestions.toSuggestionJson().toString())
+            .apply()
+        mutableConfig.value = mutableConfig.value.copy(senderSuggestions = suggestions)
+    }
+
     fun putPending(context: Context, reminder: PendingReminder) {
         val pending = mutableConfig.value.pending.associateBy { it.key }.toMutableMap()
         pending[reminder.key] = reminder
@@ -90,6 +114,8 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
         rules = prefs.getString(RULES, null).fromJsonArray()?.toRules().orEmpty(),
         pending = prefs.getString(PENDING, null).fromJsonArray()?.toPendingList().orEmpty(),
         settings = prefs.getString(SETTINGS, null).fromJsonObject()?.toSettings() ?: ReminderSettings(),
+        senderSuggestions = prefs.getString(SENDER_SUGGESTIONS, null)
+            .fromJsonObject()?.toSenderSuggestions().orEmpty(),
     )
 
     private fun Map<String, AppRule>.toJson() = JSONArray().also { array ->
@@ -98,8 +124,8 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
                 put("packageName", rule.packageName)
                 put("enabled", rule.enabled)
                 put("intervalMinutes", rule.intervalMinutes)
-                put("maxRepeats", rule.maxRepeats)
-                put("senderFilter", rule.senderFilter)
+                put("maxRepeats", rule.maxRepeats ?: JSONObject.NULL)
+                put("senderFilters", JSONArray(rule.senderFilters))
                 put("exactSenderMatch", rule.exactSenderMatch)
             })
         }
@@ -113,8 +139,9 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
                 packageName = packageName,
                 enabled = item.optBoolean("enabled", false),
                 intervalMinutes = item.optInt("intervalMinutes", 5).coerceIn(1, 1440),
-                maxRepeats = item.optInt("maxRepeats", 3).coerceIn(1, 20),
-                senderFilter = item.optString("senderFilter"),
+                maxRepeats = item.optionalRepeatLimit(),
+                senderFilters = item.optJSONArray("senderFilters")?.toStringList()
+                    ?: item.optString("senderFilter").takeIf(String::isNotBlank)?.let(::listOf).orEmpty(),
                 exactSenderMatch = item.optBoolean("exactSenderMatch", true),
             ))
         }
@@ -129,7 +156,7 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
                 put("sender", reminder.sender)
                 put("preview", reminder.preview)
                 put("intervalMinutes", reminder.intervalMinutes)
-                put("maxRepeats", reminder.maxRepeats)
+                put("maxRepeats", reminder.maxRepeats ?: JSONObject.NULL)
                 put("sentRepeats", reminder.sentRepeats)
                 put("nextAtMillis", reminder.nextAtMillis)
                 put("demo", reminder.demo)
@@ -148,7 +175,7 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
                 sender = item.optString("sender"),
                 preview = item.optString("preview"),
                 intervalMinutes = item.optInt("intervalMinutes", 5).coerceIn(1, 1440),
-                maxRepeats = item.optInt("maxRepeats", 3).coerceIn(1, 20),
+                maxRepeats = item.optionalRepeatLimit(),
                 sentRepeats = item.optInt("sentRepeats", 0).coerceAtLeast(0),
                 nextAtMillis = item.optLong("nextAtMillis", 0L),
                 demo = item.optBoolean("demo", false),
@@ -162,6 +189,37 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
         put("quietHoursEnabled", quietHoursEnabled)
         put("quietStartMinute", quietStartMinute)
         put("quietEndMinute", quietEndMinute)
+    }
+
+    private fun Map<String, List<String>>.toSuggestionJson() = JSONObject().also { json ->
+        forEach { (packageName, names) ->
+            json.put(packageName, JSONArray(names))
+        }
+    }
+
+    private fun JSONObject.toSenderSuggestions(): Map<String, List<String>> = buildMap {
+        val keys = keys()
+        while (keys.hasNext()) {
+            val packageName = keys.next()
+            val names = optJSONArray(packageName)?.toStringList().orEmpty()
+                .map { it.trim().take(80) }
+                .filter(String::isNotBlank)
+                .distinctBy(String::lowercase)
+                .take(MAX_SUGGESTIONS_PER_APP)
+            if (names.isNotEmpty()) put(packageName, names)
+        }
+    }
+
+    private fun JSONArray.toStringList(): List<String> = buildList {
+        for (index in 0 until length()) {
+            optString(index).takeIf(String::isNotBlank)?.let(::add)
+        }
+    }
+
+    private fun JSONObject.optionalRepeatLimit(): Int? = when {
+        !has("maxRepeats") -> 3
+        isNull("maxRepeats") -> null
+        else -> optInt("maxRepeats", 3).coerceIn(1, 20)
     }
 
     private fun JSONObject.toSettings() = ReminderSettings(

@@ -10,8 +10,8 @@ data class AppRule(
     val packageName: String,
     val enabled: Boolean = false,
     val intervalMinutes: Int = 5,
-    val maxRepeats: Int = 3,
-    val senderFilter: String = "",
+    val maxRepeats: Int? = 3,
+    val senderFilters: List<String> = emptyList(),
     val exactSenderMatch: Boolean = true,
 )
 
@@ -22,7 +22,7 @@ data class PendingReminder(
     val sender: String,
     val preview: String,
     val intervalMinutes: Int,
-    val maxRepeats: Int,
+    val maxRepeats: Int?,
     val sentRepeats: Int = 0,
     val nextAtMillis: Long = 0L,
     val demo: Boolean = false,
@@ -40,4 +40,5 @@ data class StoredConfig(
     val rules: Map<String, AppRule> = emptyMap(),
     val pending: List<PendingReminder> = emptyList(),
     val settings: ReminderSettings = ReminderSettings(),
+    val senderSuggestions: Map<String, List<String>> = emptyMap(),
 )

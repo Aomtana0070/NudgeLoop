@@ -27,6 +27,7 @@ import kotlinx.coroutines.withContext
 data class PermissionState(
     val notificationAccess: Boolean = false,
     val postNotifications: Boolean = false,
+    val appNotificationsEnabled: Boolean = false,
     val exactAlarms: Boolean = false,
 )
 
@@ -54,18 +55,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun refresh() {
         val context = getApplication<Application>()
         val previousPermissions = mutableState.value.permissions
+        val postNotifications = Build.VERSION.SDK_INT < 33 ||
+            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
         val permissions = PermissionState(
-                notificationAccess = hasNotificationAccess(context),
-                postNotifications = Build.VERSION.SDK_INT < 33 ||
-                    context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED,
-                exactAlarms = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-                    context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms(),
-            )
+            notificationAccess = hasNotificationAccess(context),
+            postNotifications = postNotifications,
+            appNotificationsEnabled = !postNotifications || ReminderEngine.canDisplayNotifications(context),
+            exactAlarms = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms(),
+        )
         if (permissions.notificationAccess &&
             (!previousPermissions.notificationAccess || (!previousPermissions.postNotifications && permissions.postNotifications))) {
             NotificationAccessService.requestRefresh(context)
         }
-        if (permissions.notificationAccess && permissions.postNotifications) {
+        if (permissions.notificationAccess && permissions.postNotifications && permissions.appNotificationsEnabled) {
             ReminderEngine.reschedulePending(context)
         }
         mutableState.value = mutableState.value.copy(loadingApps = true, permissions = permissions)
@@ -82,8 +85,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun ruleFor(packageName: String): AppRule = state.value.config.rules[packageName] ?: AppRule(packageName)
 
+    fun senderSuggestionsFor(packageName: String): List<String> =
+        state.value.config.senderSuggestions[packageName].orEmpty()
+
     fun saveRule(rule: AppRule) {
-        ReminderEngine.applyRule(getApplication(), rule)
+        val context = getApplication<Application>()
+        ReminderEngine.applyRule(context, rule)
+        if (rule.enabled) {
+            NotificationAccessService.requestRefresh(context)
+        }
     }
 
     fun saveSettings(settings: ReminderSettings) {

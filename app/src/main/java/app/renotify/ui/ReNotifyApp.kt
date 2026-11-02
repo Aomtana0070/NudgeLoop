@@ -4,11 +4,16 @@ import android.app.TimePickerDialog
 import android.content.Intent
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -20,18 +25,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.PrivacyTip
@@ -40,15 +52,20 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -58,7 +75,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,7 +86,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -92,12 +110,88 @@ private enum class Destination(val label: String, val icon: ImageVector) {
     Guide("คู่มือ", Icons.AutoMirrored.Outlined.HelpOutline),
 }
 
+@Composable
+private fun FloatingNotchBar(selected: Destination, onSelect: (Destination) -> Unit) {
+    val selectedPosition by animateFloatAsState(
+        targetValue = (Destination.entries.indexOf(selected) + 0.5f) / Destination.entries.size,
+        animationSpec = tween(360, easing = FastOutSlowInEasing),
+        label = "floating-notch-position",
+    )
+    val notchShape = remember(selectedPosition) {
+        GenericShape { size, _ ->
+            val corner = size.height * 0.34f
+            val notchHalfWidth = size.height * 0.4f
+            val notchDepth = size.height * 0.25f
+            val center = (size.width * selectedPosition).coerceIn(notchHalfWidth + corner, size.width - notchHalfWidth - corner)
+            moveTo(0f, corner)
+            cubicTo(0f, corner * 0.45f, corner * 0.45f, 0f, corner, 0f)
+            lineTo(center - notchHalfWidth, 0f)
+            cubicTo(center - notchHalfWidth * 0.45f, 0f, center - notchHalfWidth * 0.45f, notchDepth, center, notchDepth)
+            cubicTo(center + notchHalfWidth * 0.45f, notchDepth, center + notchHalfWidth * 0.45f, 0f, center + notchHalfWidth, 0f)
+            lineTo(size.width - corner, 0f)
+            cubicTo(size.width - corner * 0.45f, 0f, size.width, corner * 0.45f, size.width, corner)
+            lineTo(size.width, size.height - corner)
+            cubicTo(size.width, size.height - corner * 0.45f, size.width - corner * 0.45f, size.height, size.width - corner, size.height)
+            lineTo(corner, size.height)
+            cubicTo(corner * 0.45f, size.height, 0f, size.height - corner * 0.45f, 0f, size.height - corner)
+            close()
+        }
+    }
+
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().height(80.dp)) {
+        Surface(
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 18.dp).height(62.dp),
+            shape = notchShape,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 4.dp,
+        ) {}
+        Row(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(62.dp).padding(horizontal = 22.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Destination.entries.forEach { entry ->
+                val isSelected = selected == entry
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxSize()
+                        .selectable(selected = isSelected, role = Role.Tab) { onSelect(entry) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Box(Modifier.fillMaxWidth().height(42.dp), contentAlignment = Alignment.Center) {
+                        if (isSelected) {
+                            Surface(
+                                modifier = Modifier.size(44.dp).offset(y = (-13).dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                tonalElevation = 5.dp,
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(entry.icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(23.dp))
+                                }
+                            }
+                        } else {
+                            Icon(entry.icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Text(
+                        entry.label,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReNotifyApp(
     viewModel: AppViewModel,
     onRequestNotificationPermission: () -> Unit,
     onOpenNotificationAccess: () -> Unit,
+    onOpenAppNotificationSettings: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -109,77 +203,71 @@ fun ReNotifyApp(
         if (selectedRule != null) selectedRule = null else destination = Destination.Home
     }
 
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            Destination.entries.forEach { entry ->
-                item(
-                    selected = destination == entry,
-                    onClick = { destination = entry; selectedRule = null },
-                    icon = { Icon(entry.icon, contentDescription = null) },
-                    label = { Text(entry.label) },
-                    alwaysShowLabel = true,
-                )
-            }
-        },
-    ) {
-        Scaffold(
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            topBar = {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.app_name), fontWeight = FontWeight.SemiBold) },
-                    actions = {
-                        IconButton(onClick = { destination = Destination.Guide }) {
-                            Icon(Icons.Outlined.Settings, contentDescription = "การตั้งค่าและคู่มือ")
-                        }
-                    },
-                )
-            },
-        ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding).imePadding()) {
-                Column(
-                    Modifier.widthIn(max = 760.dp)
-                        .fillMaxSize()
-                        .align(Alignment.TopCenter)
-                        .padding(horizontal = 20.dp),
-                ) {
-                    when (destination) {
-                        Destination.Home -> HomeScreen(
-                            state.permissions,
-                            state.config.rules.values.count { it.enabled },
-                            state.config.pending,
-                            onOpenNotificationAccess,
-                            onRequestNotificationPermission,
-                            onOpenExactAlarmSettings,
-                            onGoApps = { destination = Destination.Apps },
-                            onStop = viewModel::stopReminder,
-                        )
-                        Destination.Apps -> AppsScreen(
-                            apps = state.apps,
-                            loading = state.loadingApps,
-                            rules = state.config.rules,
-                            query = query,
-                            onQueryChange = { query = it },
-                            onToggle = { app, enabled ->
-                                viewModel.saveRule(viewModel.ruleFor(app.packageName).copy(enabled = enabled))
-                            },
-                            onEdit = { selectedRule = it },
-                        )
-                        Destination.Rules -> RulesScreen(
-                            apps = state.apps,
-                            rules = state.config.rules,
-                            onEdit = { selectedRule = it },
-                            onAdd = { destination = Destination.Apps },
-                        )
-                        Destination.Guide -> GuideScreen(
-                            state.permissions,
-                            state.config.settings,
-                            onOpenNotificationAccess,
-                            onRequestNotificationPermission,
-                            onOpenExactAlarmSettings,
-                            onSaveSettings = viewModel::saveSettings,
-                            onDemo = viewModel::demoReminder,
-                        )
+    Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.app_name), fontWeight = FontWeight.SemiBold) },
+                actions = {
+                    IconButton(onClick = { destination = Destination.Guide }) {
+                        Icon(Icons.Outlined.Settings, contentDescription = "การตั้งค่าและคู่มือ")
                     }
+                },
+            )
+        },
+        bottomBar = {
+            FloatingNotchBar(
+                selected = destination,
+                onSelect = { destination = it; selectedRule = null },
+            )
+        },
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding).imePadding()) {
+            Column(
+                Modifier.widthIn(max = 760.dp)
+                    .fillMaxSize()
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 20.dp),
+            ) {
+                when (destination) {
+                    Destination.Home -> HomeScreen(
+                        state.permissions,
+                        state.config.rules.values.count { it.enabled },
+                        state.config.pending,
+                        onOpenNotificationAccess,
+                        onRequestNotificationPermission,
+                        onOpenAppNotificationSettings,
+                        onOpenExactAlarmSettings,
+                        onGoApps = { destination = Destination.Apps },
+                        onStop = viewModel::stopReminder,
+                    )
+                    Destination.Apps -> AppsScreen(
+                        apps = state.apps,
+                        loading = state.loadingApps,
+                        rules = state.config.rules,
+                        query = query,
+                        onQueryChange = { query = it },
+                        onToggle = { app, enabled ->
+                            viewModel.saveRule(viewModel.ruleFor(app.packageName).copy(enabled = enabled))
+                        },
+                        onEdit = { selectedRule = it },
+                    )
+                    Destination.Rules -> RulesScreen(
+                        apps = state.apps,
+                        rules = state.config.rules,
+                        onEdit = { selectedRule = it },
+                        onAdd = { destination = Destination.Apps },
+                    )
+                    Destination.Guide -> GuideScreen(
+                        state.permissions,
+                        state.config.settings,
+                        onOpenNotificationAccess,
+                        onRequestNotificationPermission,
+                        onOpenAppNotificationSettings,
+                        onOpenExactAlarmSettings,
+                        onSaveSettings = viewModel::saveSettings,
+                        onDemo = viewModel::demoReminder,
+                    )
                 }
             }
         }
@@ -189,6 +277,7 @@ fun ReNotifyApp(
         RuleEditorDialog(
             app = app,
             initialRule = viewModel.ruleFor(app.packageName),
+            senderSuggestions = viewModel.senderSuggestionsFor(app.packageName),
             pendingCount = viewModel.remindersFor(app.packageName).size,
             onDismiss = { selectedRule = null },
             onSave = { viewModel.saveRule(it); selectedRule = null },
@@ -203,6 +292,7 @@ private fun HomeScreen(
     pending: List<PendingReminder>,
     onOpenNotificationAccess: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
+    onOpenAppNotificationSettings: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
     onGoApps: () -> Unit,
     onStop: (String) -> Unit,
@@ -219,19 +309,22 @@ private fun HomeScreen(
                 Icon(Icons.Outlined.NotificationsActive, contentDescription = null, modifier = Modifier.size(34.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(if (permissions.notificationAccess && permissions.postNotifications) "พร้อมเตือนซ้ำ" else "ตั้งค่าให้ครบก่อน", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(if (permissions.notificationAccess && permissions.postNotifications && permissions.appNotificationsEnabled) "พร้อมเตือนซ้ำ" else "ตั้งค่าให้ครบก่อน", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Text("$enabledRules แอปที่เปิดอยู่ · ${pending.count { !it.demo }} รายการกำลังรอ", color = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
             }
         }
 
-        if (!permissions.notificationAccess || !permissions.postNotifications || !permissions.exactAlarms) {
+        if (!permissions.notificationAccess || !permissions.postNotifications || !permissions.appNotificationsEnabled || !permissions.exactAlarms) {
             SectionTitle("สถานะการตั้งค่า")
             if (!permissions.notificationAccess) PermissionRow(
                 "เข้าถึงการแจ้งเตือน", "ตรวจพบข้อความและหยุดเตือนเมื่อคุณจัดการแล้ว", false, onOpenNotificationAccess,
             )
             if (!permissions.postNotifications) PermissionRow(
                 "ส่งการแจ้งเตือนซ้ำ", "ต้องอนุญาตให้ NudgeLoop แสดงการเตือน", false, onRequestNotificationPermission,
+            )
+            if (permissions.postNotifications && !permissions.appNotificationsEnabled) PermissionRow(
+                "เปิดการแจ้งเตือนของ NudgeLoop", "ตรวจสอบว่าไม่ได้ปิดการแจ้งเตือนหรือช่องเตือนซ้ำใน Android", false, onOpenAppNotificationSettings,
             )
             if (!permissions.exactAlarms) PermissionRow(
                 "เพิ่มความแม่นยำของเวลา", "ไม่เปิดก็ใช้ได้ แต่อาจถูกเลื่อนโดย Android", false, onOpenExactAlarmSettings,
@@ -362,8 +455,9 @@ private fun RulesScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(app.label, fontWeight = FontWeight.SemiBold)
-                            val sender = rule.senderFilter.takeIf(String::isNotBlank) ?: "ทุกผู้ส่ง"
-                            Text("$sender · ทุก ${rule.intervalMinutes} นาที · ${rule.maxRepeats} ครั้ง", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val senders = rule.senderFilters.takeIf { it.isNotEmpty() }?.joinToString() ?: "ทุกผู้ส่ง"
+                            val repeats = rule.maxRepeats?.let { "$it ครั้ง" } ?: "ไม่จำกัดครั้ง"
+                            Text("$senders · ทุก ${rule.intervalMinutes} นาที · $repeats", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Icon(Icons.Outlined.ChevronRight, contentDescription = "แก้ไข")
                     }
@@ -379,6 +473,7 @@ private fun GuideScreen(
     settings: ReminderSettings,
     onOpenNotificationAccess: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
+    onOpenAppNotificationSettings: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
     onSaveSettings: (ReminderSettings) -> Unit,
     onDemo: () -> Unit,
@@ -391,7 +486,8 @@ private fun GuideScreen(
         SectionTitle("เริ่มต้นใช้งาน")
         NumberedStep("1", "อนุญาตให้ NudgeLoop อ่านการแจ้งเตือน", "ใช้ชื่อแอปและชื่อผู้ส่งเพื่อเลือกกฎ และตรวจเมื่อการแจ้งเตือนต้นทางถูกปิด", permissions.notificationAccess, onOpenNotificationAccess)
         NumberedStep("2", "อนุญาตการแจ้งเตือนของ NudgeLoop", "จำเป็นสำหรับการส่งการเตือนซ้ำบน Android 13 ขึ้นไป", permissions.postNotifications, onRequestNotificationPermission)
-        NumberedStep("3", "เพิ่มความแม่นยำของเวลา", "ไม่เปิดก็ใช้ได้ แต่อาจถูกเลื่อนโดยโหมดประหยัดพลังงาน", permissions.exactAlarms, onOpenExactAlarmSettings)
+        NumberedStep("3", "เปิดช่องทางแจ้งเตือนของ NudgeLoop", "ถ้าปิดแอปหรือช่องเตือนซ้ำไว้ Android จะไม่แสดงการเตือน", permissions.appNotificationsEnabled, onOpenAppNotificationSettings)
+        NumberedStep("4", "เพิ่มความแม่นยำของเวลา", "ไม่เปิดก็ใช้ได้ แต่อาจถูกเลื่อนโดยโหมดประหยัดพลังงาน", permissions.exactAlarms, onOpenExactAlarmSettings)
         Text("แตะชื่อขั้นตอนเพื่อเปิดหน้าตั้งค่าที่เกี่ยวข้อง", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         SectionTitle("ตั้งค่าขั้นสูง")
@@ -411,17 +507,17 @@ private fun GuideScreen(
             }
         }
 
-        SectionTitle("ลองเตือนบนคอมพิวเตอร์")
+        SectionTitle("ทดสอบการแจ้งเตือน")
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("ส่งตัวอย่างเตือนทันที แล้วเตือนซ้ำอีก 1 นาทีถัดไป", fontWeight = FontWeight.SemiBold)
                 Text("ใช้ตรวจการแสดงผลและการตั้งเวลาใน Emulator โดยไม่ต้องมีบัญชี Instagram หากเปิดช่วงงดเตือน ตัวอย่างจะรอจนหมดช่วงนั้น", color = MaterialTheme.colorScheme.onTertiaryContainer)
-                Button(onClick = onDemo, enabled = permissions.postNotifications) { Text("ทดลองเตือน") }
+                Button(onClick = onDemo, enabled = permissions.postNotifications && permissions.appNotificationsEnabled) { Text("ทดลองเตือน") }
             }
         }
 
         SectionTitle("ความเป็นส่วนตัวและข้อจำกัด")
-        InfoRow(Icons.Outlined.PrivacyTip, "ไม่เชื่อมบัญชี", "อ่านข้อความจากการแจ้งเตือนที่ Android ส่งให้ และเก็บกฎไว้ในเครื่อง")
+        InfoRow(Icons.Outlined.PrivacyTip, "ไม่เชื่อมบัญชี", "อ่านข้อความจากการแจ้งเตือนที่ Android ส่งให้ และเก็บกฎกับชื่อหัวข้อสำหรับคำแนะนำไว้ในเครื่อง")
         InfoRow(Icons.Outlined.NotificationsOff, "หยุดเตือนได้เอง", "ปิดการแจ้งเตือนต้นทางหรือกด ‘หยุดเตือน’ ในเตือนซ้ำเพื่อยกเลิกรอบถัดไป")
         InfoRow(Icons.Outlined.Bedtime, "เวลาอาจคลาดเคลื่อน", "โหมดประหยัดพลังงานและข้อจำกัดของผู้ผลิตมือถืออาจทำให้ Android เลื่อนการเตือน")
         TextButton(onClick = {
@@ -432,19 +528,36 @@ private fun GuideScreen(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 private fun RuleEditorDialog(
     app: AppEntry,
     initialRule: AppRule,
+    senderSuggestions: List<String>,
     pendingCount: Int,
     onDismiss: () -> Unit,
     onSave: (AppRule) -> Unit,
 ) {
     var enabled by remember(app.packageName, initialRule) { mutableStateOf(initialRule.enabled) }
-    var sender by remember(app.packageName, initialRule) { mutableStateOf(initialRule.senderFilter) }
+    var senders by remember(app.packageName, initialRule) { mutableStateOf(initialRule.senderFilters) }
+    var senderQuery by remember(app.packageName, initialRule) { mutableStateOf("") }
+    var suggestionsExpanded by remember(app.packageName) { mutableStateOf(false) }
     var interval by remember(app.packageName, initialRule) { mutableStateOf(initialRule.intervalMinutes.toString()) }
-    var limit by remember(app.packageName, initialRule) { mutableStateOf(initialRule.maxRepeats.toString()) }
+    var limit by remember(app.packageName, initialRule) { mutableStateOf(initialRule.maxRepeats?.toString() ?: "3") }
+    var unlimited by remember(app.packageName, initialRule) { mutableStateOf(initialRule.maxRepeats == null) }
     var exact by remember(app.packageName, initialRule) { mutableStateOf(initialRule.exactSenderMatch) }
     var error by remember { mutableStateOf<String?>(null) }
+    val matchingSuggestions = senderSuggestions
+        .filter { it.startsWith(senderQuery.trim(), ignoreCase = true) }
+        .filterNot { suggestion -> senders.any { it.equals(suggestion, ignoreCase = true) } }
+        .take(5)
+
+    fun addSender(value: String = senderQuery) {
+        val name = value.trim().take(80)
+        if (name.isBlank() || senders.any { it.equals(name, ignoreCase = true) }) return
+        senders = senders + name
+        senderQuery = ""
+        suggestionsExpanded = false
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -462,17 +575,56 @@ private fun RuleEditorDialog(
                         modifier = Modifier.semantics { contentDescription = "เปิดเตือนซ้ำสำหรับ ${app.label}" },
                     )
                 }
-                OutlinedTextField(
-                    value = sender,
-                    onValueChange = { sender = it; error = null },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("ชื่อผู้ส่ง (เว้นว่าง = ทุกคน)") },
-                    supportingText = { Text("อิงจากชื่อที่แอปต้นทางแสดงในหัวข้อแจ้งเตือน") },
-                    singleLine = true,
-                )
+                Text("เลือกผู้ส่งได้หลายคน · ไม่เลือก = ทุกคน", style = MaterialTheme.typography.labelLarge)
+                if (senders.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        senders.forEach { name ->
+                            InputChip(
+                                selected = true,
+                                onClick = { senders = senders.filterNot { it == name } },
+                                label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                trailingIcon = { Icon(Icons.Outlined.Close, contentDescription = "เอา $name ออก") },
+                            )
+                        }
+                    }
+                }
+                Box {
+                    OutlinedTextField(
+                        value = senderQuery,
+                        onValueChange = {
+                            senderQuery = it.take(80)
+                            suggestionsExpanded = true
+                            error = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("ชื่อผู้ส่ง") },
+                        supportingText = { Text("พิมพ์เพื่อค้นหาชื่อที่เคยปรากฏในแจ้งเตือนของแอปนี้") },
+                        trailingIcon = {
+                            IconButton(onClick = { addSender() }, enabled = senderQuery.isNotBlank()) {
+                                Icon(Icons.Outlined.Add, contentDescription = "เพิ่มชื่อผู้ส่ง")
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { addSender() }),
+                        singleLine = true,
+                    )
+                    DropdownMenu(
+                        expanded = suggestionsExpanded && senderQuery.isNotBlank() && matchingSuggestions.isNotEmpty(),
+                        onDismissRequest = { suggestionsExpanded = false },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        matchingSuggestions.forEach { suggestion ->
+                            DropdownMenuItem(
+                                text = { Text(suggestion) },
+                                onClick = { addSender(suggestion) },
+                            )
+                        }
+                    }
+                }
+                Text("คำแนะนำมาจากชื่อหัวข้อแจ้งเตือนที่พบขณะเปิดสิทธิ์อ่านการแจ้งเตือน และเก็บไว้ในเครื่อง", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = exact, onCheckedChange = { exact = it })
-                    Text(if (exact) "ตรงกับชื่อทั้งหมด" else "มีชื่อนี้อยู่ในหัวข้อก็พอ")
+                    Text(if (exact) "ตรงกับชื่อทั้งหมด" else "มีชื่อที่เลือกอยู่ในหัวข้อก็พอ")
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
@@ -489,8 +641,16 @@ private fun RuleEditorDialog(
                         modifier = Modifier.weight(1f),
                         label = { Text("เตือนกี่ครั้ง") },
                         supportingText = { Text("1–20 ครั้ง") },
+                        enabled = !unlimited,
                         singleLine = true,
                     )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = unlimited, onCheckedChange = { unlimited = it; error = null })
+                    Column {
+                        Text("เตือนไม่จำกัดครั้ง", fontWeight = FontWeight.Medium)
+                        Text("เตือนต่อไปจนกว่าจะปิดแจ้งเตือนต้นทางหรือกดหยุด", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 if (pendingCount > 0) Text("มี $pendingCount รายการรออยู่ · การแก้กฎจะนำไปใช้ทันที", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -501,8 +661,17 @@ private fun RuleEditorDialog(
                 val minutes = interval.toIntOrNull()
                 val repeats = limit.toIntOrNull()
                 if (minutes == null || minutes !in 1..1440) error = "ช่วงเวลาต้องอยู่ระหว่าง 1 ถึง 1440 นาที"
-                else if (repeats == null || repeats !in 1..20) error = "จำนวนครั้งต้องอยู่ระหว่าง 1 ถึง 20 ครั้ง"
-                else onSave(initialRule.copy(enabled = enabled, senderFilter = sender.trim(), exactSenderMatch = exact, intervalMinutes = minutes, maxRepeats = repeats))
+                else if (!unlimited && (repeats == null || repeats !in 1..20)) error = "จำนวนครั้งต้องอยู่ระหว่าง 1 ถึง 20 ครั้ง"
+                else onSave(initialRule.copy(
+                    enabled = enabled,
+                    senderFilters = (senders + senderQuery.trim().takeIf(String::isNotBlank).orEmpty())
+                        .map(String::trim)
+                        .filter(String::isNotEmpty)
+                        .distinctBy(String::lowercase),
+                    exactSenderMatch = exact,
+                    intervalMinutes = minutes,
+                    maxRepeats = if (unlimited) null else repeats,
+                ))
             }) { Text("บันทึก") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("ยกเลิก") } },
@@ -518,7 +687,8 @@ private fun ReminderRow(reminder: PendingReminder, onStop: (String) -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text("${reminder.appLabel}${reminder.sender.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()}", fontWeight = FontWeight.SemiBold)
                 val whenText = if (reminder.nextAtMillis <= System.currentTimeMillis()) "กำลังเตือน" else "เตือนอีก ${ceilMinutes(reminder.nextAtMillis - System.currentTimeMillis())} นาที"
-                Text("$whenText · ${reminder.sentRepeats}/${reminder.maxRepeats} ครั้ง", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val count = reminder.maxRepeats?.let { "${reminder.sentRepeats}/$it ครั้ง" } ?: "ครั้งที่ ${reminder.sentRepeats} · ไม่จำกัด"
+                Text("$whenText · $count", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = { onStop(reminder.key) }) {
                 Icon(Icons.Outlined.StopCircle, contentDescription = "หยุดเตือน ${reminder.appLabel}")

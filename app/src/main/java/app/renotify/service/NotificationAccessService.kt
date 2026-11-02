@@ -45,6 +45,7 @@ class NotificationAccessService : NotificationListenerService() {
         val title = sbn.notification.extras
             .getCharSequence(android.app.Notification.EXTRA_TITLE)
             ?.toString()?.trim().orEmpty()
+        RuleStore.rememberSenderSuggestion(this, sbn.packageName, title)
         val body = sbn.notification.extras
             .getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)
             ?.toString()
