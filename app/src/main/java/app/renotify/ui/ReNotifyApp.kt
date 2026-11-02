@@ -235,6 +235,7 @@ fun ReNotifyApp(
                         state.permissions,
                         state.config.rules.values.count { it.enabled },
                         state.config.pending,
+                        onReconnectNotificationAccess = viewModel::refreshNotificationListener,
                         onOpenNotificationAccess,
                         onRequestNotificationPermission,
                         onOpenAppNotificationSettings,
@@ -292,6 +293,7 @@ private fun HomeScreen(
     permissions: PermissionState,
     enabledRules: Int,
     pending: List<PendingReminder>,
+    onReconnectNotificationAccess: () -> Unit,
     onOpenNotificationAccess: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onOpenAppNotificationSettings: () -> Unit,
@@ -311,16 +313,22 @@ private fun HomeScreen(
                 Icon(Icons.Outlined.NotificationsActive, contentDescription = null, modifier = Modifier.size(34.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(if (permissions.notificationAccess && permissions.postNotifications && permissions.appNotificationsEnabled && permissions.exactAlarms) "พร้อมเตือนซ้ำ" else "ตั้งค่าให้ครบก่อน", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(if (permissions.notificationAccess && permissions.notificationListenerConnected && permissions.postNotifications && permissions.appNotificationsEnabled && permissions.exactAlarms) "พร้อมเตือนซ้ำ" else "ตรวจสอบการเชื่อมต่อ", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Text("$enabledRules แอปที่เปิดอยู่ · ${pending.count { !it.demo }} รายการกำลังรอ", color = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
             }
         }
 
-        if (!permissions.notificationAccess || !permissions.postNotifications || !permissions.appNotificationsEnabled || !permissions.exactAlarms) {
+        if (!permissions.notificationAccess || !permissions.notificationListenerConnected || !permissions.postNotifications || !permissions.appNotificationsEnabled || !permissions.exactAlarms) {
             SectionTitle("สถานะการตั้งค่า")
             if (!permissions.notificationAccess) PermissionRow(
                 "เข้าถึงการแจ้งเตือน", "ตรวจพบข้อความและหยุดเตือนเมื่อคุณจัดการแล้ว", false, onOpenNotificationAccess,
+            )
+            if (permissions.notificationAccess && !permissions.notificationListenerConnected) PermissionRow(
+                "บริการอ่านแจ้งเตือนยังไม่เชื่อมต่อ",
+                "แตะเพื่อลองเชื่อมต่อใหม่และสแกนการแจ้งเตือนที่ยังค้าง",
+                false,
+                onReconnectNotificationAccess,
             )
             if (!permissions.postNotifications) PermissionRow(
                 "ส่งการแจ้งเตือนซ้ำ", "ต้องอนุญาตให้ NudgeLoop แสดงการเตือน", false, onRequestNotificationPermission,
@@ -487,12 +495,12 @@ private fun GuideScreen(
         Text("ตั้งค่าครั้งเดียว แล้ว NudgeLoop จะคอยเตือนให้คุณกลับไปดูข้อความที่ยังค้างอยู่", color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         SectionTitle("เริ่มต้นใช้งาน")
-        NumberedStep("1", "อนุญาตให้ NudgeLoop อ่านการแจ้งเตือน", "ใช้ชื่อแอปและชื่อผู้ส่งเพื่อเลือกกฎ และตรวจเมื่อการแจ้งเตือนต้นทางถูกปิด", permissions.notificationAccess, onOpenNotificationAccess)
+        NumberedStep("1", "อนุญาตให้ NudgeLoop อ่านการแจ้งเตือน", "ใช้ชื่อแอปและชื่อผู้ส่งเพื่อเลือกกฎ และตรวจเมื่อการแจ้งเตือนต้นทางถูกปิด", permissions.notificationAccess && permissions.notificationListenerConnected, onOpenNotificationAccess)
         NumberedStep("2", "อนุญาตการแจ้งเตือนของ NudgeLoop", "จำเป็นสำหรับการส่งการเตือนซ้ำบน Android 13 ขึ้นไป", permissions.postNotifications, onRequestNotificationPermission)
         NumberedStep("3", "เปิดช่องทางแจ้งเตือนของ NudgeLoop", "ถ้าปิดแอปหรือช่องเตือนซ้ำไว้ Android จะไม่แสดงการเตือน", permissions.appNotificationsEnabled, onOpenAppNotificationSettings)
         NumberedStep("4", "อนุญาตนาฬิกาปลุกที่แม่นยำ", "ถ้าไม่อนุญาต Android 12 ขึ้นไปอาจเลื่อนเวลาได้ถึงประมาณ 1 ชั่วโมง", permissions.exactAlarms, onOpenExactAlarmSettings)
         InfoRow(Icons.Outlined.Bedtime, "ทำงานเมื่อปิดหน้าจอ", "การปัด NudgeLoop ออกจากหน้ารายการแอปไม่ควรหยุด AlarmManager แต่การบังคับหยุดจะบล็อกงานจนกว่าจะเปิดแอปอีกครั้ง")
-        Text("ถ้ายังไม่เตือนเมื่อปิดแอป ให้เปิดข้อมูลแอปด้านล่าง แล้วตั้งค่าแบตเตอรี่เป็นไม่จำกัด/อนุญาตทำงานเบื้องหลัง (ชื่อเมนูขึ้นกับยี่ห้อ)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Redmi/Xiaomi: เปิดข้อมูลแอป NudgeLoop > ประหยัดแบตเตอรี่ > ไม่มีข้อจำกัด และเปิดเริ่มการทำงานอัตโนมัติ/Background autostart หากมี", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedButton(onClick = onOpenBackgroundSettings) { Text("ตั้งค่าแบตเตอรี่และการทำงานเบื้องหลัง") }
         Text("แตะชื่อขั้นตอนเพื่อเปิดหน้าตั้งค่าที่เกี่ยวข้อง", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 

@@ -9,11 +9,14 @@ import app.renotify.data.RuleStore
 import app.renotify.data.RuleMatcher
 import java.lang.ref.WeakReference
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class NotificationAccessService : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         instance = WeakReference(this)
+        mutableConnectionState.value = true
         val active = try {
             activeNotifications.orEmpty().toList()
         } catch (error: RuntimeException) {
@@ -86,6 +89,7 @@ class NotificationAccessService : NotificationListenerService() {
         super.onListenerDisconnected()
         Log.w(TAG, "Notification listener disconnected; requesting rebind")
         if (instance?.get() === this) instance = null
+        mutableConnectionState.value = false
         synchronized(activeOriginalKeys) { activeOriginalKeys.clear() }
         NotificationListenerService.requestRebind(ComponentName(this, NotificationAccessService::class.java))
     }
@@ -93,10 +97,14 @@ class NotificationAccessService : NotificationListenerService() {
     companion object {
         private val contentIntents = ConcurrentHashMap<String, PendingIntent?>()
         private val activeOriginalKeys = mutableSetOf<String>()
+        private val mutableConnectionState = MutableStateFlow(false)
+        val connectionState = mutableConnectionState.asStateFlow()
         @Volatile private var instance: WeakReference<NotificationAccessService>? = null
         private const val TAG = "NotificationAccess"
 
         fun contentIntentFor(key: String): PendingIntent? = contentIntents[key]
+
+        fun isConnected(): Boolean = instance?.get() != null
 
         fun isOriginalActive(key: String): Boolean? {
             val service = instance?.get() ?: return null
