@@ -13,6 +13,7 @@ import androidx.activity.viewModels
 import app.renotify.ui.AppViewModel
 import app.renotify.ui.ReNotifyApp
 import app.renotify.ui.ReNotifyTheme
+import app.renotify.service.ListenerKeepAliveService
 
 class MainActivity : ComponentActivity() {
     private val viewModel: AppViewModel by viewModels()
@@ -42,6 +43,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        ListenerKeepAliveService.startIfAllowed(this)
         viewModel.refresh()
     }
 

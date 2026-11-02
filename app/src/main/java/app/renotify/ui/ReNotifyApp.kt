@@ -511,6 +511,11 @@ private fun GuideScreen(
                 DiagnosticsRow("สิทธิ์อ่านแจ้งเตือน", if (permissions.notificationAccess) "อนุญาต" else "ยังไม่อนุญาต", permissions.notificationAccess)
                 DiagnosticsRow("บริการ listener", if (permissions.notificationListenerConnected) "เชื่อมต่ออยู่" else "ไม่ได้เชื่อมต่อ", permissions.notificationListenerConnected)
                 DiagnosticsRow(
+                    "บริการพยุงเบื้องหลัง",
+                    if (permissions.listenerKeepAliveRunning) "ทำงานอยู่ · มีการแจ้งเตือนถาวร" else "ยังไม่ทำงาน",
+                    permissions.listenerKeepAliveRunning,
+                )
+                DiagnosticsRow(
                     "เชื่อมต่อ listener ล่าสุด",
                     diagnosticEvent("", diagnostics.lastListenerConnectedAtMillis, apps),
                 )
@@ -602,7 +607,7 @@ private fun GuideScreen(
         NumberedStep("2", "อนุญาตการแจ้งเตือนของ NudgeLoop", "จำเป็นสำหรับการส่งการเตือนซ้ำบน Android 13 ขึ้นไป", permissions.postNotifications, onRequestNotificationPermission)
         NumberedStep("3", "เปิดช่องทางแจ้งเตือนของ NudgeLoop", "ถ้าปิดแอปหรือช่องเตือนซ้ำไว้ Android จะไม่แสดงการเตือน", permissions.appNotificationsEnabled, onOpenAppNotificationSettings)
         NumberedStep("4", "อนุญาตนาฬิกาปลุกที่แม่นยำ", "ถ้าไม่อนุญาต Android 12 ขึ้นไปอาจเลื่อนเวลาได้ถึงประมาณ 1 ชั่วโมง", permissions.exactAlarms, onOpenExactAlarmSettings)
-        InfoRow(Icons.Outlined.Bedtime, "ทำงานเมื่อปิดหน้าจอ", "การปัด NudgeLoop ออกจากหน้ารายการแอปไม่ควรหยุด AlarmManager แต่การบังคับหยุดจะบล็อกงานจนกว่าจะเปิดแอปอีกครั้ง")
+        InfoRow(Icons.Outlined.Bedtime, "พยุง listener เมื่อปิดแอป", "เมื่ออนุญาตอ่านแจ้งเตือนและการแจ้งเตือนของ NudgeLoop แอปจะเปิดบริการเบื้องหน้าพร้อมแจ้งเตือนถาวรเพื่อช่วยคง process และลองเชื่อม listener ใหม่")
         Text("Redmi/Xiaomi: เปิดข้อมูลแอป NudgeLoop > ประหยัดแบตเตอรี่ > ไม่มีข้อจำกัด และเปิดเริ่มการทำงานอัตโนมัติ/Background autostart หากมี", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedButton(onClick = onOpenBackgroundSettings) { Text("ตั้งค่าแบตเตอรี่และการทำงานเบื้องหลัง") }
         Text("แตะชื่อขั้นตอนเพื่อเปิดหน้าตั้งค่าที่เกี่ยวข้อง", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

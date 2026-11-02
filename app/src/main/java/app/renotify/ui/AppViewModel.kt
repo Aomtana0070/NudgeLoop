@@ -15,6 +15,7 @@ import app.renotify.data.ReminderSettings
 import app.renotify.data.RuleStore
 import app.renotify.data.StoredConfig
 import app.renotify.service.NotificationAccessService
+import app.renotify.service.ListenerKeepAliveService
 import app.renotify.service.ReminderEngine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +30,7 @@ import kotlinx.coroutines.withContext
 data class PermissionState(
     val notificationAccess: Boolean = false,
     val notificationListenerConnected: Boolean = false,
+    val listenerKeepAliveRunning: Boolean = false,
     val postNotifications: Boolean = false,
     val appNotificationsEnabled: Boolean = false,
     val exactAlarms: Boolean = false,
@@ -56,6 +58,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             NotificationAccessService.connectionState.collect(::updateListenerConnectionState)
         }
+        viewModelScope.launch {
+            ListenerKeepAliveService.runningState.collect(::updateListenerKeepAliveState)
+        }
         refresh()
     }
 
@@ -66,6 +71,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val permissions = PermissionState(
             notificationAccess = hasNotificationAccess(context),
             notificationListenerConnected = NotificationAccessService.isConnected(),
+            listenerKeepAliveRunning = ListenerKeepAliveService.isRunning(),
             postNotifications = postNotifications,
             appNotificationsEnabled = !postNotifications || ReminderEngine.canDisplayNotifications(context),
             exactAlarms = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
@@ -157,6 +163,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun updateListenerConnectionState(connected: Boolean) {
         mutableState.value = mutableState.value.copy(
             permissions = mutableState.value.permissions.copy(notificationListenerConnected = connected),
+        )
+    }
+
+    private fun updateListenerKeepAliveState(running: Boolean) {
+        mutableState.value = mutableState.value.copy(
+            permissions = mutableState.value.permissions.copy(listenerKeepAliveRunning = running),
         )
     }
 

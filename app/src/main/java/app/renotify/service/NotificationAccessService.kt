@@ -170,7 +170,7 @@ class NotificationAccessService : NotificationListenerService() {
             }
         }
 
-        private fun hasNotificationAccess(context: android.content.Context): Boolean {
+        fun hasNotificationAccess(context: android.content.Context): Boolean {
             val expected = ComponentName(context, NotificationAccessService::class.java)
             val enabled = android.provider.Settings.Secure.getString(
                 context.contentResolver,
