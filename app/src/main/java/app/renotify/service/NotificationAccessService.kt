@@ -99,8 +99,22 @@ class NotificationAccessService : NotificationListenerService() {
         fun contentIntentFor(key: String): PendingIntent? = contentIntents[key]
 
         fun isOriginalActive(key: String): Boolean? {
-            if (instance?.get() == null) return null
-            return synchronized(activeOriginalKeys) { key in activeOriginalKeys }
+            val service = instance?.get() ?: return null
+            val active = try {
+                service.activeNotifications.orEmpty()
+                    .asSequence()
+                    .filterNot { it.packageName == service.packageName }
+                    .map(StatusBarNotification::getKey)
+                    .toSet()
+            } catch (error: RuntimeException) {
+                Log.w(TAG, "Unable to verify whether a source notification is still active", error)
+                return null
+            }
+            synchronized(activeOriginalKeys) {
+                activeOriginalKeys.clear()
+                activeOriginalKeys.addAll(active)
+            }
+            return key in active
         }
 
         fun requestRefresh(context: android.content.Context) {
@@ -117,8 +131,13 @@ class NotificationAccessService : NotificationListenerService() {
                     return
                 }
                 val original = active.filterNot { it.packageName == context.packageName }
+                val activeKeys = original.map(StatusBarNotification::getKey).toSet()
+                synchronized(activeOriginalKeys) {
+                    activeOriginalKeys.clear()
+                    activeOriginalKeys.addAll(activeKeys)
+                }
                 Log.i(TAG, "Refreshing ${original.size} active notifications")
-                ReminderEngine.restoreAfterListenerConnect(context, original.map(StatusBarNotification::getKey).toSet())
+                ReminderEngine.restoreAfterListenerConnect(context, activeKeys)
                 original.forEach(service::inspect)
             }
         }
