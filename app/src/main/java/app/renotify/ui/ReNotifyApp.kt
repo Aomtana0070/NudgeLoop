@@ -235,7 +235,6 @@ fun ReNotifyApp(
                         state.permissions,
                         state.config.rules.values.count { it.enabled },
                         state.config.pending,
-                        onReconnectNotificationAccess = viewModel::refreshNotificationListener,
                         onOpenNotificationAccess,
                         onRequestNotificationPermission,
                         onOpenAppNotificationSettings,
@@ -298,7 +297,6 @@ private fun HomeScreen(
     permissions: PermissionState,
     enabledRules: Int,
     pending: List<PendingReminder>,
-    onReconnectNotificationAccess: () -> Unit,
     onOpenNotificationAccess: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onOpenAppNotificationSettings: () -> Unit,
@@ -331,9 +329,9 @@ private fun HomeScreen(
             )
             if (permissions.notificationAccess && !permissions.notificationListenerConnected) PermissionRow(
                 "บริการอ่านแจ้งเตือนยังไม่เชื่อมต่อ",
-                "แตะเพื่อลองเชื่อมต่อใหม่และสแกนการแจ้งเตือนที่ยังค้าง",
+                "แตะเพื่อเปิดหน้า Notification access แล้วปิด–เปิดสวิตช์ NudgeLoop",
                 false,
-                onReconnectNotificationAccess,
+                onOpenNotificationAccess,
             )
             if (!permissions.postNotifications) PermissionRow(
                 "ส่งการแจ้งเตือนซ้ำ", "ต้องอนุญาตให้ NudgeLoop แสดงการเตือน", false, onRequestNotificationPermission,
@@ -512,12 +510,35 @@ private fun GuideScreen(
             ) {
                 DiagnosticsRow("สิทธิ์อ่านแจ้งเตือน", if (permissions.notificationAccess) "อนุญาต" else "ยังไม่อนุญาต", permissions.notificationAccess)
                 DiagnosticsRow("บริการ listener", if (permissions.notificationListenerConnected) "เชื่อมต่ออยู่" else "ไม่ได้เชื่อมต่อ", permissions.notificationListenerConnected)
+                DiagnosticsRow(
+                    "เชื่อมต่อ listener ล่าสุด",
+                    diagnosticEvent("", diagnostics.lastListenerConnectedAtMillis, apps),
+                )
+                DiagnosticsRow(
+                    "หลุดการเชื่อมต่อล่าสุด",
+                    diagnosticEvent("", diagnostics.lastListenerDisconnectedAtMillis, apps),
+                )
                 DiagnosticsRow("ส่งการแจ้งเตือน", if (permissions.postNotifications && permissions.appNotificationsEnabled) "พร้อม" else "ถูกปิดกั้น", permissions.postNotifications && permissions.appNotificationsEnabled)
                 DiagnosticsRow("Alarm แม่นยำ", if (permissions.exactAlarms) "อนุญาต" else "ไม่ได้อนุญาต", permissions.exactAlarms)
                 DiagnosticsRow("กฎที่เปิดใช้งาน", "$enabledRules แอป")
                 DiagnosticsRow(
                     "แจ้งเตือนต้นทางล่าสุด",
                     diagnosticEvent(diagnostics.lastSourcePackage, diagnostics.lastSourceAtMillis, apps),
+                )
+                DiagnosticsRow(
+                    "ผลตรวจ rule ล่าสุด",
+                    diagnostics.lastRuleCheckResult.takeIf(String::isNotBlank)?.let { result ->
+                        val detail = when (result) {
+                            "matched" -> "ผ่านกฎ"
+                            "sender_mismatch" -> "ไม่ตรงชื่อผู้ส่ง"
+                            "disabled" -> "ปิดกฎแอปนี้"
+                            "no_rule" -> "ยังไม่มีกฎของแอปนี้"
+                            else -> "ไม่ทราบผล"
+                        }
+                        val appLabel = apps.firstOrNull { it.packageName == diagnostics.lastRuleCheckedPackage }?.label
+                            ?: diagnostics.lastRuleCheckedPackage
+                        "$appLabel · $detail · ${relativeTime(diagnostics.lastRuleCheckedAtMillis)}"
+                    } ?: "ยังไม่มีข้อมูล",
                 )
                 DiagnosticsRow(
                     "ประมวลผลผ่านกฎล่าสุด",
@@ -569,6 +590,9 @@ private fun GuideScreen(
                 )
                 OutlinedButton(onClick = onScanNotifications) {
                     Text("สแกนแจ้งเตือนที่ยังค้าง")
+                }
+                OutlinedButton(onClick = onOpenNotificationAccess) {
+                    Text("เปิดการตั้งค่า Notification access")
                 }
             }
         }
@@ -641,6 +665,7 @@ private fun DiagnosticsRow(title: String, value: String, healthy: Boolean? = nul
 
 private fun diagnosticEvent(packageName: String, atMillis: Long, apps: List<AppEntry>): String {
     if (atMillis <= 0L) return "ยังไม่มีข้อมูล"
+    if (packageName.isBlank()) return relativeTime(atMillis)
     val appLabel = apps.firstOrNull { it.packageName == packageName }?.label ?: packageName
     return "$appLabel · ${relativeTime(atMillis)}"
 }

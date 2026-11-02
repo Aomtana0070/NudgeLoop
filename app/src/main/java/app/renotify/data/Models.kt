@@ -37,8 +37,13 @@ data class ReminderSettings(
 )
 
 data class ReminderDiagnostics(
+    val lastListenerConnectedAtMillis: Long = 0L,
+    val lastListenerDisconnectedAtMillis: Long = 0L,
     val lastSourceAtMillis: Long = 0L,
     val lastSourcePackage: String = "",
+    val lastRuleCheckedAtMillis: Long = 0L,
+    val lastRuleCheckedPackage: String = "",
+    val lastRuleCheckResult: String = "",
     val lastMatchedAtMillis: Long = 0L,
     val lastMatchedPackage: String = "",
     val lastAlarmScheduledAtMillis: Long = 0L,

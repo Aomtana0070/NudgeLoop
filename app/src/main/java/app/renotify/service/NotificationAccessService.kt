@@ -17,6 +17,7 @@ class NotificationAccessService : NotificationListenerService() {
         super.onListenerConnected()
         instance = WeakReference(this)
         mutableConnectionState.value = true
+        RuleStore.recordListenerConnected(this, System.currentTimeMillis())
         val active = try {
             activeNotifications.orEmpty().toList()
         } catch (error: RuntimeException) {
@@ -47,6 +48,8 @@ class NotificationAccessService : NotificationListenerService() {
 
     private fun inspect(sbn: StatusBarNotification) {
         if (sbn.packageName == packageName) return
+        val inspectedAt = System.currentTimeMillis()
+        RuleStore.recordSourceNotification(this, sbn.packageName, inspectedAt)
         if ((sbn.notification.flags and android.app.Notification.FLAG_ONGOING_EVENT) != 0) {
             Log.d(TAG, "Ignoring ongoing notification from ${sbn.packageName}")
             return
@@ -68,11 +71,23 @@ class NotificationAccessService : NotificationListenerService() {
                 ?.toString().orEmpty()
 
         val config = RuleStore.config.value
-        val rule = config.rules[sbn.packageName]?.takeIf { it.enabled } ?: return
+        val configuredRule = config.rules[sbn.packageName]
+        val rule = configuredRule?.takeIf { it.enabled }
+        if (rule == null) {
+            RuleStore.recordRuleCheck(
+                this,
+                sbn.packageName,
+                if (configuredRule == null) "no_rule" else "disabled",
+                inspectedAt,
+            )
+            return
+        }
         if (!RuleMatcher.matchesSender(rule, title)) {
+            RuleStore.recordRuleCheck(this, sbn.packageName, "sender_mismatch", inspectedAt)
             Log.d(TAG, "Notification from ${sbn.packageName} did not match its sender rule")
             return
         }
+        RuleStore.recordRuleCheck(this, sbn.packageName, "matched", inspectedAt)
         RuleStore.recordRuleMatched(this, sbn.packageName, System.currentTimeMillis())
         Log.i(TAG, "Matched notification from ${sbn.packageName}; scheduling reminder")
         sbn.notification.contentIntent?.let { contentIntents[sbn.key] = it }
@@ -94,6 +109,7 @@ class NotificationAccessService : NotificationListenerService() {
         Log.w(TAG, "Notification listener disconnected; requesting rebind")
         if (instance?.get() === this) instance = null
         mutableConnectionState.value = false
+        RuleStore.recordListenerDisconnected(this, System.currentTimeMillis())
         synchronized(activeOriginalKeys) { activeOriginalKeys.clear() }
         NotificationListenerService.requestRebind(ComponentName(this, NotificationAccessService::class.java))
     }

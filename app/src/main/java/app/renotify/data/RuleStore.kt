@@ -65,6 +65,28 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
         }
     }
 
+    fun recordListenerConnected(context: Context, atMillis: Long) {
+        updateDiagnostics(context) {
+            it.copy(lastListenerConnectedAtMillis = atMillis)
+        }
+    }
+
+    fun recordListenerDisconnected(context: Context, atMillis: Long) {
+        updateDiagnostics(context) {
+            it.copy(lastListenerDisconnectedAtMillis = atMillis)
+        }
+    }
+
+    fun recordRuleCheck(context: Context, packageName: String, result: String, atMillis: Long) {
+        updateDiagnostics(context) {
+            it.copy(
+                lastRuleCheckedAtMillis = atMillis,
+                lastRuleCheckedPackage = packageName,
+                lastRuleCheckResult = result,
+            )
+        }
+    }
+
     fun recordRuleMatched(context: Context, packageName: String, atMillis: Long) {
         updateDiagnostics(context) {
             it.copy(lastMatchedAtMillis = atMillis, lastMatchedPackage = packageName)
@@ -175,8 +197,13 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
     )
 
     private fun ReminderDiagnostics.toJson() = JSONObject().apply {
+        put("lastListenerConnectedAtMillis", lastListenerConnectedAtMillis)
+        put("lastListenerDisconnectedAtMillis", lastListenerDisconnectedAtMillis)
         put("lastSourceAtMillis", lastSourceAtMillis)
         put("lastSourcePackage", lastSourcePackage)
+        put("lastRuleCheckedAtMillis", lastRuleCheckedAtMillis)
+        put("lastRuleCheckedPackage", lastRuleCheckedPackage)
+        put("lastRuleCheckResult", lastRuleCheckResult)
         put("lastMatchedAtMillis", lastMatchedAtMillis)
         put("lastMatchedPackage", lastMatchedPackage)
         put("lastAlarmScheduledAtMillis", lastAlarmScheduledAtMillis)
@@ -191,8 +218,13 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
     }
 
     private fun JSONObject.toDiagnostics() = ReminderDiagnostics(
+        lastListenerConnectedAtMillis = optLong("lastListenerConnectedAtMillis", 0L),
+        lastListenerDisconnectedAtMillis = optLong("lastListenerDisconnectedAtMillis", 0L),
         lastSourceAtMillis = optLong("lastSourceAtMillis", 0L),
         lastSourcePackage = optString("lastSourcePackage"),
+        lastRuleCheckedAtMillis = optLong("lastRuleCheckedAtMillis", 0L),
+        lastRuleCheckedPackage = optString("lastRuleCheckedPackage"),
+        lastRuleCheckResult = optString("lastRuleCheckResult"),
         lastMatchedAtMillis = optLong("lastMatchedAtMillis", 0L),
         lastMatchedPackage = optString("lastMatchedPackage"),
         lastAlarmScheduledAtMillis = optLong("lastAlarmScheduledAtMillis", 0L),
