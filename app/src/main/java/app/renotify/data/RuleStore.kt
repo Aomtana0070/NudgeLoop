@@ -13,6 +13,7 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
     private const val PENDING = "pending"
     private const val SETTINGS = "settings"
     private const val SENDER_SUGGESTIONS = "sender_suggestions"
+    private const val DIAGNOSTICS = "diagnostics"
     private const val MAX_SUGGESTIONS_PER_APP = 100
     private const val MAX_APPS_WITH_SUGGESTIONS = 40
 
@@ -56,6 +57,50 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
     fun saveSettings(context: Context, settings: ReminderSettings) {
         prefs(context).edit().putString(SETTINGS, settings.toJson().toString()).apply()
         mutableConfig.value = mutableConfig.value.copy(settings = settings)
+    }
+
+    fun recordSourceNotification(context: Context, packageName: String, atMillis: Long) {
+        updateDiagnostics(context) {
+            it.copy(lastSourceAtMillis = atMillis, lastSourcePackage = packageName)
+        }
+    }
+
+    fun recordRuleMatched(context: Context, packageName: String, atMillis: Long) {
+        updateDiagnostics(context) {
+            it.copy(lastMatchedAtMillis = atMillis, lastMatchedPackage = packageName)
+        }
+    }
+
+    fun recordAlarmScheduled(context: Context, packageName: String, atMillis: Long, triggerAtMillis: Long) {
+        updateDiagnostics(context) {
+            it.copy(
+                lastAlarmScheduledAtMillis = atMillis,
+                nextAlarmAtMillis = triggerAtMillis,
+                lastAlarmPackage = packageName,
+            )
+        }
+    }
+
+    fun recordAlarmReceived(context: Context, packageName: String, atMillis: Long) {
+        updateDiagnostics(context) {
+            it.copy(
+                lastAlarmReceivedAtMillis = atMillis,
+                lastAlarmReceivedPackage = packageName,
+                nextAlarmAtMillis = 0L,
+            )
+        }
+    }
+
+    fun recordReminderPosted(context: Context, packageName: String, atMillis: Long) {
+        updateDiagnostics(context) {
+            it.copy(lastReminderPostedAtMillis = atMillis, lastReminderPostedPackage = packageName)
+        }
+    }
+
+    fun recordDeliveryProblem(context: Context, problem: String, atMillis: Long) {
+        updateDiagnostics(context) {
+            it.copy(lastDeliveryProblemAtMillis = atMillis, lastDeliveryProblem = problem)
+        }
     }
 
     fun rememberSenderSuggestion(context: Context, packageName: String, title: String) {
@@ -105,6 +150,15 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
         mutableConfig.value = mutableConfig.value.copy(pending = reminders)
     }
 
+    private fun updateDiagnostics(context: Context, update: (ReminderDiagnostics) -> ReminderDiagnostics) {
+        val prefs = prefs(context)
+        synchronized(lock) {
+            val diagnostics = update(mutableConfig.value.diagnostics)
+            prefs.edit().putString(DIAGNOSTICS, diagnostics.toJson().toString()).apply()
+            mutableConfig.value = mutableConfig.value.copy(diagnostics = diagnostics)
+        }
+    }
+
     private fun prefs(context: Context): SharedPreferences {
         initialize(context)
         return preferences!!
@@ -116,6 +170,40 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
         settings = prefs.getString(SETTINGS, null).fromJsonObject()?.toSettings() ?: ReminderSettings(),
         senderSuggestions = prefs.getString(SENDER_SUGGESTIONS, null)
             .fromJsonObject()?.toSenderSuggestions().orEmpty(),
+        diagnostics = prefs.getString(DIAGNOSTICS, null)
+            .fromJsonObject()?.toDiagnostics() ?: ReminderDiagnostics(),
+    )
+
+    private fun ReminderDiagnostics.toJson() = JSONObject().apply {
+        put("lastSourceAtMillis", lastSourceAtMillis)
+        put("lastSourcePackage", lastSourcePackage)
+        put("lastMatchedAtMillis", lastMatchedAtMillis)
+        put("lastMatchedPackage", lastMatchedPackage)
+        put("lastAlarmScheduledAtMillis", lastAlarmScheduledAtMillis)
+        put("nextAlarmAtMillis", nextAlarmAtMillis)
+        put("lastAlarmPackage", lastAlarmPackage)
+        put("lastAlarmReceivedAtMillis", lastAlarmReceivedAtMillis)
+        put("lastAlarmReceivedPackage", lastAlarmReceivedPackage)
+        put("lastReminderPostedAtMillis", lastReminderPostedAtMillis)
+        put("lastReminderPostedPackage", lastReminderPostedPackage)
+        put("lastDeliveryProblemAtMillis", lastDeliveryProblemAtMillis)
+        put("lastDeliveryProblem", lastDeliveryProblem)
+    }
+
+    private fun JSONObject.toDiagnostics() = ReminderDiagnostics(
+        lastSourceAtMillis = optLong("lastSourceAtMillis", 0L),
+        lastSourcePackage = optString("lastSourcePackage"),
+        lastMatchedAtMillis = optLong("lastMatchedAtMillis", 0L),
+        lastMatchedPackage = optString("lastMatchedPackage"),
+        lastAlarmScheduledAtMillis = optLong("lastAlarmScheduledAtMillis", 0L),
+        nextAlarmAtMillis = optLong("nextAlarmAtMillis", 0L),
+        lastAlarmPackage = optString("lastAlarmPackage"),
+        lastAlarmReceivedAtMillis = optLong("lastAlarmReceivedAtMillis", 0L),
+        lastAlarmReceivedPackage = optString("lastAlarmReceivedPackage"),
+        lastReminderPostedAtMillis = optLong("lastReminderPostedAtMillis", 0L),
+        lastReminderPostedPackage = optString("lastReminderPostedPackage"),
+        lastDeliveryProblemAtMillis = optLong("lastDeliveryProblemAtMillis", 0L),
+        lastDeliveryProblem = optString("lastDeliveryProblem"),
     )
 
     private fun Map<String, AppRule>.toJson() = JSONArray().also { array ->

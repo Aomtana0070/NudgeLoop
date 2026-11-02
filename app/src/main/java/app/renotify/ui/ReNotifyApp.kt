@@ -261,13 +261,18 @@ fun ReNotifyApp(
                         onAdd = { destination = Destination.Apps },
                     )
                     Destination.Guide -> GuideScreen(
-                        state.permissions,
-                        state.config.settings,
-                        onOpenNotificationAccess,
-                        onRequestNotificationPermission,
-                        onOpenAppNotificationSettings,
-                        onOpenExactAlarmSettings,
-                        onOpenBackgroundSettings,
+                        permissions = state.permissions,
+                        settings = state.config.settings,
+                        pending = state.config.pending.filterNot { it.demo },
+                        diagnostics = state.config.diagnostics,
+                        apps = state.apps,
+                        enabledRules = state.config.rules.values.count { it.enabled },
+                        onScanNotifications = viewModel::refreshNotificationListener,
+                        onOpenNotificationAccess = onOpenNotificationAccess,
+                        onRequestNotificationPermission = onRequestNotificationPermission,
+                        onOpenAppNotificationSettings = onOpenAppNotificationSettings,
+                        onOpenExactAlarmSettings = onOpenExactAlarmSettings,
+                        onOpenBackgroundSettings = onOpenBackgroundSettings,
                         onSaveSettings = viewModel::saveSettings,
                         onDemo = viewModel::demoReminder,
                     )
@@ -481,6 +486,11 @@ private fun RulesScreen(
 private fun GuideScreen(
     permissions: PermissionState,
     settings: ReminderSettings,
+    pending: List<PendingReminder>,
+    diagnostics: app.renotify.data.ReminderDiagnostics,
+    apps: List<AppEntry>,
+    enabledRules: Int,
+    onScanNotifications: () -> Unit,
     onOpenNotificationAccess: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onOpenAppNotificationSettings: () -> Unit,
@@ -493,6 +503,75 @@ private fun GuideScreen(
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("คู่มือและการตั้งค่า", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("ตั้งค่าครั้งเดียว แล้ว NudgeLoop จะคอยเตือนให้คุณกลับไปดูข้อความที่ยังค้างอยู่", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        SectionTitle("ตรวจสอบการทำงาน")
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Column(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                DiagnosticsRow("สิทธิ์อ่านแจ้งเตือน", if (permissions.notificationAccess) "อนุญาต" else "ยังไม่อนุญาต", permissions.notificationAccess)
+                DiagnosticsRow("บริการ listener", if (permissions.notificationListenerConnected) "เชื่อมต่ออยู่" else "ไม่ได้เชื่อมต่อ", permissions.notificationListenerConnected)
+                DiagnosticsRow("ส่งการแจ้งเตือน", if (permissions.postNotifications && permissions.appNotificationsEnabled) "พร้อม" else "ถูกปิดกั้น", permissions.postNotifications && permissions.appNotificationsEnabled)
+                DiagnosticsRow("Alarm แม่นยำ", if (permissions.exactAlarms) "อนุญาต" else "ไม่ได้อนุญาต", permissions.exactAlarms)
+                DiagnosticsRow("กฎที่เปิดใช้งาน", "$enabledRules แอป")
+                DiagnosticsRow(
+                    "แจ้งเตือนต้นทางล่าสุด",
+                    diagnosticEvent(diagnostics.lastSourcePackage, diagnostics.lastSourceAtMillis, apps),
+                )
+                DiagnosticsRow(
+                    "ประมวลผลผ่านกฎล่าสุด",
+                    diagnosticEvent(diagnostics.lastMatchedPackage, diagnostics.lastMatchedAtMillis, apps),
+                )
+                DiagnosticsRow(
+                    "ตั้ง Alarm ล่าสุด",
+                    diagnosticEvent(diagnostics.lastAlarmPackage, diagnostics.lastAlarmScheduledAtMillis, apps),
+                )
+                if (diagnostics.nextAlarmAtMillis > 0L) {
+                    DiagnosticsRow("Alarm รอบถัดไป", relativeTime(diagnostics.nextAlarmAtMillis))
+                }
+                DiagnosticsRow(
+                    "รับ Alarm ล่าสุด",
+                    diagnosticEvent(diagnostics.lastAlarmReceivedPackage, diagnostics.lastAlarmReceivedAtMillis, apps),
+                )
+                DiagnosticsRow(
+                    "แสดงเตือนซ้ำล่าสุด",
+                    diagnosticEvent(diagnostics.lastReminderPostedPackage, diagnostics.lastReminderPostedAtMillis, apps),
+                )
+                if (diagnostics.lastDeliveryProblem.isNotBlank()) {
+                    DiagnosticsRow(
+                        "ปัญหาล่าสุด",
+                        "${diagnostics.lastDeliveryProblem} · ${relativeTime(diagnostics.lastDeliveryProblemAtMillis)}",
+                        false,
+                    )
+                }
+                HorizontalDivider()
+                Text(
+                    "รายการรอ ${pending.size} รายการ",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (pending.isEmpty()) {
+                    Text("ยังไม่มีรายการที่ผ่านกฎ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    pending.sortedBy(PendingReminder::nextAtMillis).take(5).forEach { reminder ->
+                        val next = if (reminder.nextAtMillis > 0L) relativeTime(reminder.nextAtMillis) else "ไม่มีรอบถัดไป"
+                        Text(
+                            "${reminder.appLabel} · ${reminder.sender.ifBlank { "ไม่มีชื่อผู้ส่ง" }} — $next",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Text(
+                    "ข้อมูลวินิจฉัยบันทึกเฉพาะเวลาและชื่อแอป ไม่เก็บเนื้อหาการแจ้งเตือน",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(onClick = onScanNotifications) {
+                    Text("สแกนแจ้งเตือนที่ยังค้าง")
+                }
+            }
+        }
 
         SectionTitle("เริ่มต้นใช้งาน")
         NumberedStep("1", "อนุญาตให้ NudgeLoop อ่านการแจ้งเตือน", "ใช้ชื่อแอปและชื่อผู้ส่งเพื่อเลือกกฎ และตรวจเมื่อการแจ้งเตือนต้นทางถูกปิด", permissions.notificationAccess && permissions.notificationListenerConnected, onOpenNotificationAccess)
@@ -540,6 +619,38 @@ private fun GuideScreen(
         }) { Text("จัดการเสียงและการแจ้งเตือนใน Android Settings") }
     }
 }
+
+@Composable
+private fun DiagnosticsRow(title: String, value: String, healthy: Boolean? = null) {
+    Row(verticalAlignment = Alignment.Top) {
+        if (healthy != null) {
+            Icon(
+                if (healthy) Icons.Outlined.CheckCircle else Icons.Outlined.NotificationsOff,
+                contentDescription = null,
+                tint = if (healthy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Column {
+            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+            Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+private fun diagnosticEvent(packageName: String, atMillis: Long, apps: List<AppEntry>): String {
+    if (atMillis <= 0L) return "ยังไม่มีข้อมูล"
+    val appLabel = apps.firstOrNull { it.packageName == packageName }?.label ?: packageName
+    return "$appLabel · ${relativeTime(atMillis)}"
+}
+
+private fun relativeTime(atMillis: Long): String =
+    android.text.format.DateUtils.getRelativeTimeSpanString(
+        atMillis,
+        System.currentTimeMillis(),
+        android.text.format.DateUtils.MINUTE_IN_MILLIS,
+    ).toString()
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)

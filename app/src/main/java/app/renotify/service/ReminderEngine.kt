@@ -102,6 +102,7 @@ object ReminderEngine {
         val canPost = hasPostPermission(context) && canDisplayNotifications(context)
         if (!canReadSource || !canPost) {
             Log.w(TAG, "Reminder permissions are unavailable; retrying later: $key")
+            RuleStore.recordDeliveryProblem(context, "สิทธิ์อ่านหรือส่งการแจ้งเตือนไม่พร้อม", System.currentTimeMillis())
             deferAndRetry(context, reminder)
             return
         }
@@ -119,9 +120,11 @@ object ReminderEngine {
         val nextCount = reminder.sentRepeats + 1
         if (!postReminder(context, reminder.copy(sentRepeats = nextCount), config.settings)) {
             Log.e(TAG, "Failed to post reminder; retrying later: $key")
+            RuleStore.recordDeliveryProblem(context, "Android ไม่ยอมแสดงการแจ้งเตือนซ้ำ", System.currentTimeMillis())
             deferAndRetry(context, reminder)
             return
         }
+        RuleStore.recordReminderPosted(context, reminder.packageName, System.currentTimeMillis())
         val updated = reminder.copy(
             sentRepeats = nextCount,
             nextAtMillis = if (ReminderPolicy.shouldRepeat(nextCount, reminder.maxRepeats)) {
@@ -242,7 +245,10 @@ object ReminderEngine {
             }.getOrDefault(false)
         }
         if (scheduled) {
+            RuleStore.recordAlarmScheduled(context, reminder.packageName, System.currentTimeMillis(), triggerAt)
             Log.i(TAG, "Reminder alarm scheduled for $triggerAt (exact=$canUseExact): ${reminder.key}")
+        } else {
+            RuleStore.recordDeliveryProblem(context, "ตั้งเวลาปลุกซ้ำไม่สำเร็จ", System.currentTimeMillis())
         }
     }
 

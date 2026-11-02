@@ -37,7 +37,10 @@ class NotificationAccessService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (sbn.packageName != packageName) synchronized(activeOriginalKeys) { activeOriginalKeys.add(sbn.key) }
+        if (sbn.packageName != packageName) {
+            synchronized(activeOriginalKeys) { activeOriginalKeys.add(sbn.key) }
+            RuleStore.recordSourceNotification(this, sbn.packageName, System.currentTimeMillis())
+        }
         Log.d(TAG, "Notification posted by ${sbn.packageName}")
         inspect(sbn)
     }
@@ -70,6 +73,7 @@ class NotificationAccessService : NotificationListenerService() {
             Log.d(TAG, "Notification from ${sbn.packageName} did not match its sender rule")
             return
         }
+        RuleStore.recordRuleMatched(this, sbn.packageName, System.currentTimeMillis())
         Log.i(TAG, "Matched notification from ${sbn.packageName}; scheduling reminder")
         sbn.notification.contentIntent?.let { contentIntents[sbn.key] = it }
             ?: contentIntents.remove(sbn.key)

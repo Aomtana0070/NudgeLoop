@@ -36,9 +36,26 @@ data class ReminderSettings(
     val quietEndMinute: Int = 7 * 60,
 )
 
+data class ReminderDiagnostics(
+    val lastSourceAtMillis: Long = 0L,
+    val lastSourcePackage: String = "",
+    val lastMatchedAtMillis: Long = 0L,
+    val lastMatchedPackage: String = "",
+    val lastAlarmScheduledAtMillis: Long = 0L,
+    val nextAlarmAtMillis: Long = 0L,
+    val lastAlarmPackage: String = "",
+    val lastAlarmReceivedAtMillis: Long = 0L,
+    val lastAlarmReceivedPackage: String = "",
+    val lastReminderPostedAtMillis: Long = 0L,
+    val lastReminderPostedPackage: String = "",
+    val lastDeliveryProblemAtMillis: Long = 0L,
+    val lastDeliveryProblem: String = "",
+)
+
 data class StoredConfig(
     val rules: Map<String, AppRule> = emptyMap(),
     val pending: List<PendingReminder> = emptyList(),
     val settings: ReminderSettings = ReminderSettings(),
     val senderSuggestions: Map<String, List<String>> = emptyMap(),
+    val diagnostics: ReminderDiagnostics = ReminderDiagnostics(),
 )
