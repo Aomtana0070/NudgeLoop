@@ -25,9 +25,11 @@ NudgeLoop repeats reminders for notifications that are still waiting in Android'
 
 - Android requires the user to grant notification-listener access in system settings. This is what lets the app observe other apps' posted and removed notifications.
 - Android 13 and later requires notification permission before NudgeLoop can post reminders.
+- NudgeLoop lists launchable apps using Android package visibility queries; it does not request blanket access to every installed package.
 - Exact alarms require the separate “Alarms & reminders” access on current Android versions. Without it the app falls back to an inexact alarm; Doze, battery saver, and manufacturer battery controls can delay a repeat.
 - After a device restart or app update, NudgeLoop reconnects to notification access and restores reminders for source notifications that are still active. Android may delay this reconnection; open NudgeLoop if reminders do not resume.
 - Android only exposes the title and text a source app includes in its notification. Sender filtering works when Instagram includes the sender in that visible notification; message previews remain hidden in NudgeLoop by default.
+- GitHub preview APKs are sideloaded debug builds and may be blocked or warned about by Google Play Protect because notification access can reveal sensitive notification content. Do not disable Play Protect to install them. A public Play Store release requires a production signing key, a privacy policy, and Google Play review for notification-listener access.
 - Removing the original notification or dismissing NudgeLoop's repeat alert stops future repeats. The app never deletes the source notification.
 
 ## Build and run on a computer
@@ -43,3 +45,12 @@ NudgeLoop repeats reminders for notifications that are still waiting in Android'
 9. Run `gradlew.bat testDebugUnitTest` for the sender-matching unit checks. Build the main app with `gradlew.bat assembleDebug` and the test sender with `gradlew.bat :sample-sender:assembleDebug`.
 
 For a command-line build, run `gradlew.bat testDebugUnitTest assembleDebug :sample-sender:assembleDebug` from this directory. The APKs are written to `app/build/outputs/apk/debug/app-debug.apk` and `sample-sender/build/outputs/apk/debug/sample-sender-debug.apk`.
+
+## Google Play release
+
+The GitHub APKs are debug-signed test builds and are not suitable for Google Play. A Play release must use a private upload key, be uploaded as an Android App Bundle, and pass Google Play's review for notification-listener access. Do not disable Play Protect to install a sideloaded APK.
+
+1. In Android Studio, use **Build > Generate Signed Bundle / APK > Android App Bundle** to create a dedicated upload key outside this repository. Back up the key and its passwords securely; never commit them.
+2. Set `NUDGELOOP_UPLOAD_STORE_FILE`, `NUDGELOOP_UPLOAD_STORE_PASSWORD`, `NUDGELOOP_UPLOAD_KEY_ALIAS`, and `NUDGELOOP_UPLOAD_KEY_PASSWORD` in the build environment. The Gradle release build refuses to produce an unsigned release.
+3. Run `gradlew.bat testDebugUnitTest bundleRelease`. Upload `app/build/outputs/bundle/release/app-release.aab` to the Play Console internal testing track first.
+4. Complete Play Console's notification-access declaration and provide a public privacy policy before requesting review. A signed bundle does not bypass Play Protect or guarantee approval; distribution through Google Play is the supported route for this app.

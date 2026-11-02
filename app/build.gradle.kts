@@ -3,6 +3,24 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val uploadStoreFile = providers.environmentVariable("NUDGELOOP_UPLOAD_STORE_FILE").orNull
+val uploadStorePassword = providers.environmentVariable("NUDGELOOP_UPLOAD_STORE_PASSWORD").orNull
+val uploadKeyAlias = providers.environmentVariable("NUDGELOOP_UPLOAD_KEY_ALIAS").orNull
+val uploadKeyPassword = providers.environmentVariable("NUDGELOOP_UPLOAD_KEY_PASSWORD").orNull
+val uploadSigningValues = listOf(uploadStoreFile, uploadStorePassword, uploadKeyAlias, uploadKeyPassword)
+val releaseSigningConfigured = uploadSigningValues.all { !it.isNullOrBlank() }
+
+if (uploadSigningValues.any { !it.isNullOrBlank() } && !releaseSigningConfigured) {
+    throw GradleException("Set all NUDGELOOP_UPLOAD_* environment variables to sign a release.")
+}
+
+val releaseOutputRequested = gradle.startParameter.taskNames.any {
+    it.substringAfterLast(':') == "bundleRelease" || it.substringAfterLast(':') == "assembleRelease"
+}
+if (releaseOutputRequested && !releaseSigningConfigured) {
+    throw GradleException("Release output must be signed. Set all NUDGELOOP_UPLOAD_* environment variables.")
+}
+
 android {
     namespace = "app.renotify"
     compileSdk = 37
@@ -11,13 +29,32 @@ android {
         applicationId = "app.renotify"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
         compose = true
+    }
+
+    if (releaseSigningConfigured) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(uploadStoreFile!!)
+                storePassword = uploadStorePassword
+                keyAlias = uploadKeyAlias
+                keyPassword = uploadKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 
     compileOptions {
