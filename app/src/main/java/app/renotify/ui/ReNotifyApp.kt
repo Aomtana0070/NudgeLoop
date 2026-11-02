@@ -25,28 +25,28 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.outlined.Rule
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.PrivacyTip
-import androidx.compose.material.icons.outlined.Rule
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -88,8 +88,8 @@ import app.renotify.ui.PermissionState
 private enum class Destination(val label: String, val icon: ImageVector) {
     Home("หน้าแรก", Icons.Outlined.NotificationsActive),
     Apps("แอป", Icons.Outlined.Apps),
-    Rules("กฎเตือน", Icons.Outlined.Rule),
-    Guide("คู่มือ", Icons.Outlined.HelpOutline),
+    Rules("กฎเตือน", Icons.AutoMirrored.Outlined.Rule),
+    Guide("คู่มือ", Icons.AutoMirrored.Outlined.HelpOutline),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -304,7 +304,7 @@ private fun AppsScreen(
                 items(filtered, key = AppEntry::packageName) { app ->
                     val rule = rules[app.packageName] ?: AppRule(app.packageName)
                     AppRow(app, rule, onToggle = { onToggle(app, it) }, onEdit = { onEdit(app) })
-                    Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                 }
             }
         }
@@ -398,7 +398,7 @@ private fun GuideScreen(
         SettingToggle("ซ่อนตัวอย่างข้อความ", "แสดงเฉพาะชื่อแอปและผู้ส่งในเตือนซ้ำ", !settings.showPreview, Icons.Outlined.VisibilityOff) {
             onSaveSettings(settings.copy(showPreview = !it))
         }
-        SettingToggle("มีเสียงเตือน", "ปรับเสียงและความสำคัญได้เพิ่มใน Android Settings", settings.soundEnabled, Icons.Outlined.VolumeUp) {
+        SettingToggle("มีเสียงเตือน", "ปรับเสียงและความสำคัญได้เพิ่มใน Android Settings", settings.soundEnabled, Icons.AutoMirrored.Outlined.VolumeUp) {
             onSaveSettings(settings.copy(soundEnabled = it))
         }
         SettingToggle("ช่วงงดเตือน", "เลื่อนการเตือนไปหลังช่วงเวลานี้", settings.quietHoursEnabled, Icons.Outlined.Bedtime) {
