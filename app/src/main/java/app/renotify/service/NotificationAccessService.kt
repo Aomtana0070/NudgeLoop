@@ -18,6 +18,7 @@ class NotificationAccessService : NotificationListenerService() {
         instance = WeakReference(this)
         mutableConnectionState.value = true
         RuleStore.recordListenerConnected(this, System.currentTimeMillis())
+        ListenerKeepAliveService.onListenerConnectionChanged(true)
         val active = try {
             activeNotifications.orEmpty().toList()
         } catch (error: RuntimeException) {
@@ -111,7 +112,8 @@ class NotificationAccessService : NotificationListenerService() {
         mutableConnectionState.value = false
         RuleStore.recordListenerDisconnected(this, System.currentTimeMillis())
         synchronized(activeOriginalKeys) { activeOriginalKeys.clear() }
-        NotificationListenerService.requestRebind(ComponentName(this, NotificationAccessService::class.java))
+        ListenerKeepAliveService.onListenerConnectionChanged(false)
+        requestListenerRebind(this, "listener_disconnected")
     }
 
     companion object {
@@ -150,7 +152,7 @@ class NotificationAccessService : NotificationListenerService() {
             val service = instance?.get()
             if (service == null) {
                 Log.i(TAG, "Notification listener is not connected; requesting rebind")
-                NotificationListenerService.requestRebind(ComponentName(context, NotificationAccessService::class.java))
+                requestListenerRebind(context, "refresh")
             } else {
                 val active = try {
                     service.activeNotifications.orEmpty().toList()
@@ -177,6 +179,33 @@ class NotificationAccessService : NotificationListenerService() {
                 "enabled_notification_listeners",
             )?.split(':').orEmpty()
             return enabled.any { ComponentName.unflattenFromString(it) == expected }
+        }
+
+        fun requestListenerRebind(context: android.content.Context, source: String) {
+            val attemptedAt = System.currentTimeMillis()
+            try {
+                NotificationListenerService.requestRebind(
+                    ComponentName(context, NotificationAccessService::class.java),
+                )
+                RuleStore.recordListenerRebindRequest(context, attemptedAt, source)
+                Log.i(TAG, "Requested notification listener rebind ($source)")
+            } catch (error: SecurityException) {
+                RuleStore.recordListenerRebindRequest(
+                    context,
+                    attemptedAt,
+                    source,
+                    error.javaClass.simpleName,
+                )
+                Log.e(TAG, "Android rejected notification listener rebind request ($source)", error)
+            } catch (error: IllegalArgumentException) {
+                RuleStore.recordListenerRebindRequest(
+                    context,
+                    attemptedAt,
+                    source,
+                    error.javaClass.simpleName,
+                )
+                Log.e(TAG, "Invalid notification listener component in rebind request ($source)", error)
+            }
         }
     }
 }

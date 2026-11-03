@@ -329,7 +329,7 @@ private fun HomeScreen(
             )
             if (permissions.notificationAccess && !permissions.notificationListenerConnected) PermissionRow(
                 "บริการอ่านแจ้งเตือนยังไม่เชื่อมต่อ",
-                "แตะเพื่อเปิดหน้า Notification access แล้วปิด–เปิดสวิตช์ NudgeLoop",
+                "กำลังลองเชื่อมต่อใหม่อัตโนมัติ หากยังไม่กลับมาเชื่อม ให้แตะเพื่อตรวจสิทธิ์",
                 false,
                 onOpenNotificationAccess,
             )
@@ -512,7 +512,15 @@ private fun GuideScreen(
                 DiagnosticsRow("บริการ listener", if (permissions.notificationListenerConnected) "เชื่อมต่ออยู่" else "ไม่ได้เชื่อมต่อ", permissions.notificationListenerConnected)
                 DiagnosticsRow(
                     "บริการพยุงเบื้องหลัง",
-                    if (permissions.listenerKeepAliveRunning) "ทำงานอยู่ · มีการแจ้งเตือนถาวร" else "ยังไม่ทำงาน",
+                    if (permissions.listenerKeepAliveRunning) {
+                        if (permissions.postNotifications && permissions.appNotificationsEnabled) {
+                            "ทำงานอยู่ · แจ้งเตือนถาวรเปิดอยู่"
+                        } else {
+                            "ทำงานอยู่ · Android อาจซ่อนแจ้งเตือนบริการ"
+                        }
+                    } else {
+                        "ยังไม่ทำงาน"
+                    },
                     permissions.listenerKeepAliveRunning,
                 )
                 DiagnosticsRow(
@@ -523,6 +531,16 @@ private fun GuideScreen(
                     "หลุดการเชื่อมต่อล่าสุด",
                     diagnosticEvent("", diagnostics.lastListenerDisconnectedAtMillis, apps),
                 )
+                DiagnosticsRow(
+                    "ขอเชื่อม listener ใหม่ล่าสุด",
+                    diagnostics.lastListenerRebindRequestedAtMillis.takeIf { it > 0L }?.let {
+                        "${diagnostics.lastListenerRebindSource} · ${relativeTime(it)}"
+                    } ?: "ยังไม่มีคำขอ",
+                    diagnostics.lastListenerRebindError.isBlank(),
+                )
+                if (diagnostics.lastListenerRebindError.isNotBlank()) {
+                    DiagnosticsRow("คำขอเชื่อมใหม่ผิดพลาด", diagnostics.lastListenerRebindError, false)
+                }
                 DiagnosticsRow("ส่งการแจ้งเตือน", if (permissions.postNotifications && permissions.appNotificationsEnabled) "พร้อม" else "ถูกปิดกั้น", permissions.postNotifications && permissions.appNotificationsEnabled)
                 DiagnosticsRow("Alarm แม่นยำ", if (permissions.exactAlarms) "อนุญาต" else "ไม่ได้อนุญาต", permissions.exactAlarms)
                 DiagnosticsRow("กฎที่เปิดใช้งาน", "$enabledRules แอป")

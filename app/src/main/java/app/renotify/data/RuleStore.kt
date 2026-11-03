@@ -77,6 +77,21 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
         }
     }
 
+    fun recordListenerRebindRequest(
+        context: Context,
+        atMillis: Long,
+        source: String,
+        error: String = "",
+    ) {
+        updateDiagnostics(context) {
+            it.copy(
+                lastListenerRebindRequestedAtMillis = atMillis,
+                lastListenerRebindSource = source,
+                lastListenerRebindError = error,
+            )
+        }
+    }
+
     fun recordRuleCheck(context: Context, packageName: String, result: String, atMillis: Long) {
         updateDiagnostics(context) {
             it.copy(
@@ -199,6 +214,9 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
     private fun ReminderDiagnostics.toJson() = JSONObject().apply {
         put("lastListenerConnectedAtMillis", lastListenerConnectedAtMillis)
         put("lastListenerDisconnectedAtMillis", lastListenerDisconnectedAtMillis)
+        put("lastListenerRebindRequestedAtMillis", lastListenerRebindRequestedAtMillis)
+        put("lastListenerRebindSource", lastListenerRebindSource)
+        put("lastListenerRebindError", lastListenerRebindError)
         put("lastSourceAtMillis", lastSourceAtMillis)
         put("lastSourcePackage", lastSourcePackage)
         put("lastRuleCheckedAtMillis", lastRuleCheckedAtMillis)
@@ -220,6 +238,9 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
     private fun JSONObject.toDiagnostics() = ReminderDiagnostics(
         lastListenerConnectedAtMillis = optLong("lastListenerConnectedAtMillis", 0L),
         lastListenerDisconnectedAtMillis = optLong("lastListenerDisconnectedAtMillis", 0L),
+        lastListenerRebindRequestedAtMillis = optLong("lastListenerRebindRequestedAtMillis", 0L),
+        lastListenerRebindSource = optString("lastListenerRebindSource"),
+        lastListenerRebindError = optString("lastListenerRebindError"),
         lastSourceAtMillis = optLong("lastSourceAtMillis", 0L),
         lastSourcePackage = optString("lastSourcePackage"),
         lastRuleCheckedAtMillis = optLong("lastRuleCheckedAtMillis", 0L),
