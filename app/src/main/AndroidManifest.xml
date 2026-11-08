@@ -53,6 +53,7 @@
         <receiver android:name=".service.ReminderReceiver" android:exported="false" />
         <receiver android:name=".service.StopReminderReceiver" android:exported="false" />
         <receiver android:name=".service.OpenReminderReceiver" android:exported="false" />
+        <receiver android:name=".service.SnoozeReceiver" android:exported="false" />
         <receiver
             android:name=".service.ReminderRestoreReceiver"
             android:exported="false">

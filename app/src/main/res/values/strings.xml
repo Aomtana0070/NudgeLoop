@@ -1,4 +1,34 @@
 <resources>
     <string name="app_name">NudgeLoop</string>
     <string name="notification_access_label">NudgeLoop – อ่านการแจ้งเตือนเพื่อเตือนซ้ำ</string>
+
+    <!-- Settings -->
+    <string name="settings_title">การตั้งค่า</string>
+    <string name="settings_quiet_hours">ชั่วโมงเงียบ</string>
+    <string name="settings_quiet_hours_summary">หยุดการเตือนซ้ำชั่วคราวในช่วงเวลาที่ตั้งไว้</string>
+    <string name="settings_quiet_start">เริ่มเวลา</string>
+    <string name="settings_quiet_end">สิ้นสุดเวลา</string>
+    <string name="settings_show_preview">แสดงตัวอย่างข้อความ</string>
+    <string name="settings_show_preview_summary">แสดงเนื้อหาของการแจ้งเตือนต้นทางในการเตือนซ้ำ</string>
+    <string name="settings_sound">เสียงเตือน</string>
+    <string name="settings_sound_summary">เปิดหรือปิดเสียงเมื่อแจ้งเตือนซ้ำ</string>
+
+    <!-- Snooze -->
+    <string name="snooze_5min">เลื่อน 5 นาที</string>
+    <string name="snooze_10min">เลื่อน 10 นาที</string>
+    <string name="snooze_15min">เลื่อน 15 นาที</string>
+    <string name="snooze_action">เลื่อน</string>
+
+    <!-- Rule dialog -->
+    <string name="rule_dialog_title">ตั้งค่า ${1$s}</string>
+    <string name="rule_enable_repeat">เปิดเตือนซ้ำ</string>
+    <string name="rule_enable_repeat_summary">สำหรับการแจ้งเตือนใหม่จากแอปนี้</string>
+    <string name="rule_select_senders">เลือกผู้ส่งได้หลายคน · ไม่เลือก = ทุกคน</string>
+    <string name="rule_recent_senders">ผู้ส่งที่พบล่าสุด</string>
+    <string name="rule_sender_name">ชื่อผู้ส่ง</string>
+    <string name="rule_interval">ความถี่ (นาที)</string>
+    <string name="rule_max_repeats">จำนวนครั้งสูงสุด</string>
+    <string name="rule_unlimited">ไม่จำกัด</string>
+    <string name="rule_exact_match">จับคู่ชื่อผู้ส่งอย่างแม่นยำ</string>
+    <string name="rule_exact_match_summary">เมื่อปิด จะจับคู่แม้ชื่อผู้ส่งจะเป็นส่วนหนึ่งของข้อความ</string>
 </resources>

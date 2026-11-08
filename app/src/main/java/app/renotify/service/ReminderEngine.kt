@@ -30,7 +30,12 @@ object ReminderEngine {
     private const val ACTION_REPEAT = "app.renotify.action.REPEAT"
     private const val ACTION_OPEN = "app.renotify.action.OPEN"
     private const val ACTION_STOP = "app.renotify.action.STOP"
+    private const val ACTION_SNOOZE = "app.renotify.action.SNOOZE"
+    private const val EXTRA_SNOOZE_MINUTES = "app.renotify.extra.SNOOZE_MINUTES"
     private const val TAG = "ReminderEngine"
+
+    private val SNOOZE_DELAYS_MINUTES = listOf(5, 10, 15)
+    private val SNOOZE_STRING_IDS = intArrayOf(R.string.snooze_5min, R.string.snooze_10min, R.string.snooze_15min)
 
     fun canDisplayNotifications(context: Context): Boolean {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
@@ -88,11 +93,18 @@ object ReminderEngine {
         val config = RuleStore.config.value
         val reminder = config.pending.firstOrNull { it.key == key } ?: return
         Log.i(TAG, "Reminder alarm fired: $key")
-        if (!reminder.demo && NotificationAccessService.isOriginalActive(key) == false) {
-            Log.i(TAG, "Source notification is no longer active; stopping reminder: $key")
-            cancel(context, key)
-            return
+
+        // Verify the source notification is still active before doing any work.
+        // Demo reminders are self-contained and skip this check.
+        if (!reminder.demo) {
+            val sourceActive = NotificationAccessService.isOriginalActive(key)
+            if (sourceActive == false) {
+                Log.i(TAG, "Source notification is no longer active; stopping reminder: $key")
+                cancel(context, key)
+                return
+            }
         }
+
         if (!ReminderPolicy.shouldRepeat(reminder.sentRepeats, reminder.maxRepeats)) {
             cancel(context, key)
             return
@@ -101,6 +113,13 @@ object ReminderEngine {
         val canReadSource = reminder.demo || hasNotificationAccess(context)
         val canPost = hasPostPermission(context) && canDisplayNotifications(context)
         if (!canReadSource || !canPost) {
+            // Re-verify source is still active before deferring; the source may
+            // have been dismissed while permissions were unavailable.
+            if (!reminder.demo && NotificationAccessService.isOriginalActive(key) == false) {
+                Log.i(TAG, "Source notification dismissed while permissions unavailable; stopping: $key")
+                cancel(context, key)
+                return
+            }
             Log.w(TAG, "Reminder permissions are unavailable; retrying later: $key")
             RuleStore.recordDeliveryProblem(context, "สิทธิ์อ่านหรือส่งการแจ้งเตือนไม่พร้อม", System.currentTimeMillis())
             deferAndRetry(context, reminder)
@@ -110,7 +129,22 @@ object ReminderEngine {
         val now = System.currentTimeMillis()
         val quietUntil = quietUntil(context, config.settings, now)
         if (quietUntil != null) {
-            val deferred = reminder.copy(nextAtMillis = quietUntil)
+            // Re-verify source is still active before deferring into quiet hours.
+            if (!reminder.demo && NotificationAccessService.isOriginalActive(key) == false) {
+                Log.i(TAG, "Source notification dismissed during quiet hours; stopping: $key")
+                cancel(context, key)
+                return
+            }
+            // This repeat fired but was suppressed by quiet hours; consume a repeat count.
+            val nextCount = reminder.sentRepeats + 1
+            if (!ReminderPolicy.shouldRepeat(nextCount, reminder.maxRepeats)) {
+                cancel(context, key)
+                return
+            }
+            val deferred = reminder.copy(
+                sentRepeats = nextCount,
+                nextAtMillis = quietUntil,
+            )
             RuleStore.putPending(context, deferred)
             schedule(context, deferred, quietUntil)
             return
@@ -119,6 +153,12 @@ object ReminderEngine {
         createChannels(context)
         val nextCount = reminder.sentRepeats + 1
         if (!postReminder(context, reminder.copy(sentRepeats = nextCount), config.settings)) {
+            // Re-verify source is still active before retrying after a delivery failure.
+            if (!reminder.demo && NotificationAccessService.isOriginalActive(key) == false) {
+                Log.i(TAG, "Source notification dismissed after delivery failure; stopping: $key")
+                cancel(context, key)
+                return
+            }
             Log.e(TAG, "Failed to post reminder; retrying later: $key")
             RuleStore.recordDeliveryProblem(context, "Android ไม่ยอมแสดงการแจ้งเตือนซ้ำ", System.currentTimeMillis())
             deferAndRetry(context, reminder)
@@ -150,6 +190,15 @@ object ReminderEngine {
 
     fun cancelPackage(context: Context, packageName: String) {
         RuleStore.removePendingForPackage(context, packageName).forEach { cancel(context, it.key) }
+    }
+
+    fun snooze(context: Context, key: String, minutes: Int) {
+        val reminder = RuleStore.config.value.pending.firstOrNull { it.key == key } ?: return
+        val snoozeAt = System.currentTimeMillis() + minutes * 60_000L
+        val snoozed = reminder.copy(nextAtMillis = snoozeAt)
+        RuleStore.putPending(context, snoozed)
+        schedule(context, snoozed, snoozeAt)
+        Log.i(TAG, "Snoozed reminder $key by $minutes minutes")
     }
 
     fun applyRule(context: Context, rule: AppRule) {
@@ -300,6 +349,20 @@ object ReminderEngine {
             context, stableId(reminder.key), stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val snoozePendings = SNOOZE_DELAYS_MINUTES.map { minutes ->
+            val snoozeIntent = Intent(context, SnoozeReceiver::class.java).apply {
+                action = ACTION_SNOOZE
+                data = Uri.parse("renotify://snooze/${stableId(reminder.key)}/$minutes")
+                putExtra(ReminderReceiver.EXTRA_KEY, reminder.key)
+                putExtra(EXTRA_SNOOZE_MINUTES, minutes)
+            }
+            PendingIntent.getBroadcast(
+                context,
+                stableId(reminder.key) + 1000 + minutes,
+                snoozeIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
         val preferredChannel = if (settings.soundEnabled) CHANNEL_SOUND else CHANNEL_SILENT
         val fallbackChannel = if (settings.soundEnabled) CHANNEL_SILENT else CHANNEL_SOUND
         val channel = if (isChannelEnabled(context, preferredChannel)) preferredChannel else fallbackChannel
@@ -315,6 +378,11 @@ object ReminderEngine {
             .setContentIntent(openPending)
             .setDeleteIntent(stopPending)
             .addAction(0, "หยุดเตือน", stopPending)
+            .apply {
+                SNOOZE_DELAYS_MINUTES.forEachIndexed { index, minutes ->
+                    addAction(0, context.getString(SNOOZE_STRING_IDS[index]), snoozePendings[index])
+                }
+            }
             .setOnlyAlertOnce(onlyAlertOnce)
             .build()
         return runCatching {
