@@ -14,6 +14,7 @@ data class AppRule(
     val senderFilters: List<String> = emptyList(),
     val exactSenderMatch: Boolean = true,
     val quietHoursBypassSenders: List<String> = emptyList(),
+    val soundPreset: String = "default",
 )
 
 data class PendingReminder(
@@ -30,6 +31,8 @@ data class PendingReminder(
 )
 
 data class ReminderSettings(
+    val profileName: String = "Nok",
+    val profileImageUri: String = "",
     val showPreview: Boolean = false,
     val soundEnabled: Boolean = true,
     val quietHoursEnabled: Boolean = false,

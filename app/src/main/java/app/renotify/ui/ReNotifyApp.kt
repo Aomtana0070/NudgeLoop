@@ -3,11 +3,18 @@ package app.renotify.ui
 import android.app.TimePickerDialog
 import android.content.Intent
 import android.provider.Settings
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +54,8 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.PrivacyTip
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.StopCircle
@@ -66,6 +75,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -84,6 +94,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
@@ -104,9 +118,10 @@ import app.renotify.data.ReminderSettings
 import app.renotify.ui.PermissionState
 
 private enum class Destination(val label: String, val icon: ImageVector) {
-    Home("หน้าแรก", Icons.Outlined.NotificationsActive),
-    Apps("แอป", Icons.Outlined.Apps),
-    Rules("กฎเตือน", Icons.AutoMirrored.Outlined.Rule),
+    Home("Home", Icons.Outlined.NotificationsActive),
+    Apps("Apps", Icons.Outlined.Apps),
+    Rules("Loops", Icons.AutoMirrored.Outlined.Rule),
+    Profile("Profile", Icons.Outlined.Person),
     Guide("คู่มือ", Icons.AutoMirrored.Outlined.HelpOutline),
 }
 
@@ -139,8 +154,9 @@ private fun LumaBrandMark(modifier: Modifier = Modifier) {
 
 @Composable
 private fun FloatingNotchBar(selected: Destination, onSelect: (Destination) -> Unit) {
+    val visibleDestinations = remember { Destination.entries.filterNot { it == Destination.Guide } }
     val selectedPosition by animateFloatAsState(
-        targetValue = (Destination.entries.indexOf(selected) + 0.5f) / Destination.entries.size,
+        targetValue = (visibleDestinations.indexOf(selected).coerceAtLeast(0) + 0.5f) / visibleDestinations.size,
         animationSpec = tween(360, easing = FastOutSlowInEasing),
         label = "floating-notch-position",
     )
@@ -176,7 +192,7 @@ private fun FloatingNotchBar(selected: Destination, onSelect: (Destination) -> U
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(62.dp).padding(horizontal = 22.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Destination.entries.forEach { entry ->
+            visibleDestinations.forEach { entry ->
                 val isSelected = selected == entry
                 Column(
                     modifier = Modifier.weight(1f).fillMaxSize()
@@ -221,8 +237,15 @@ fun ReNotifyApp(
     onOpenAppNotificationSettings: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
     onOpenBackgroundSettings: () -> Unit,
+    onPickProfileImage: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val glowAlpha by rememberInfiniteTransition(label = "lumaloop-glow").animateFloat(
+        initialValue = 0.12f,
+        targetValue = 0.24f,
+        animationSpec = infiniteRepeatable(tween(2600), RepeatMode.Reverse),
+        label = "lumaloop-glow-alpha",
+    )
     var destination by remember { mutableStateOf(Destination.Home) }
     var selectedRule by remember { mutableStateOf<AppEntry?>(null) }
     var query by remember { mutableStateOf("") }
@@ -237,7 +260,12 @@ fun ReNotifyApp(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        LumaBrandMark()
+                        Image(
+                            painter = painterResource(R.drawable.lumaloop_logo),
+                            contentDescription = "LumaLoop logo",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(28.dp).clip(MaterialTheme.shapes.small),
+                        )
                         Spacer(Modifier.width(10.dp))
                         Text(stringResource(R.string.app_name), fontWeight = FontWeight.SemiBold)
                     }
@@ -256,7 +284,27 @@ fun ReNotifyApp(
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).imePadding()) {
+        Box(
+            Modifier.fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(Color(0xFF2C2447), Color(0xFF111014), Color(0xFF0D0C10)),
+                        radius = 900f,
+                    ),
+                )
+                .padding(padding)
+                .imePadding(),
+        ) {
+            Box(
+                Modifier.align(Alignment.TopEnd)
+                    .offset(x = 58.dp, y = (-42).dp)
+                    .size(240.dp)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(Color(0xFFA88CFF).copy(alpha = glowAlpha), Color.Transparent),
+                        ),
+                    ),
+            )
             Column(
                 Modifier.widthIn(max = 760.dp)
                     .fillMaxSize()
@@ -268,6 +316,8 @@ fun ReNotifyApp(
                         state.permissions,
                         state.config.rules.values.count { it.enabled },
                         state.config.pending,
+                        state.config.settings.profileName,
+                        state.config.settings.profileImageUri,
                         onOpenNotificationAccess,
                         onRequestNotificationPermission,
                         onOpenAppNotificationSettings,
@@ -308,6 +358,15 @@ fun ReNotifyApp(
                         onSaveSettings = viewModel::saveSettings,
                         onDemo = viewModel::demoReminder,
                     )
+                    Destination.Profile -> ProfileScreen(
+                        name = state.config.settings.profileName,
+                        imageUri = state.config.settings.profileImageUri,
+                        settings = state.config.settings,
+                        enabledRules = state.config.rules.values.count { it.enabled },
+                        onSaveSettings = viewModel::saveSettings,
+                        onOpenGuide = { destination = Destination.Guide },
+                        onPickImage = onPickProfileImage,
+                    )
                 }
             }
         }
@@ -330,6 +389,8 @@ private fun HomeScreen(
     permissions: PermissionState,
     enabledRules: Int,
     pending: List<PendingReminder>,
+    profileName: String,
+    profileImageUri: String,
     onOpenNotificationAccess: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onOpenAppNotificationSettings: () -> Unit,
@@ -344,36 +405,40 @@ private fun HomeScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Good morning,", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Nok", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                Text(profileName, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
             }
-            Surface(
-                modifier = Modifier.size(44.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text("N", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
-                }
-            }
+            ProfileAvatar(profileName, profileImageUri, 44.dp)
         }
         Text("โฟกัสกับสิ่งสำคัญ\nส่วน LumaLoop จะคอยเตือนให้", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        Surface(
+            modifier = Modifier.fillMaxWidth().background(
+                Brush.linearGradient(listOf(Color(0xFF3B2A68), Color(0xFF241A3A))),
+                MaterialTheme.shapes.extraLarge,
+            ),
             shape = MaterialTheme.shapes.extraLarge,
+            color = Color.Transparent,
         ) {
             Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.NotificationsActive, contentDescription = null, modifier = Modifier.size(34.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.NotificationsActive, contentDescription = null, modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.secondary)
+                    }
+                }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(if (permissions.notificationAccess && permissions.notificationListenerConnected && permissions.postNotifications && permissions.appNotificationsEnabled && permissions.exactAlarms) "Luma is online" else "Finish your setup", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(if (permissions.notificationAccess && permissions.notificationListenerConnected && permissions.postNotifications && permissions.appNotificationsEnabled && permissions.exactAlarms) "Luma is online" else "Finish your setup", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFFF2EAFE))
                     Text(
                         if (permissions.notificationAccess && !permissions.notificationListenerConnected) {
                             "ได้รับสิทธิ์แล้ว แต่กำลังรอ Android เชื่อมต่อบริการ"
                         } else {
                             "$enabledRules แอปที่เปิดอยู่ · ${pending.count { !it.demo }} รายการกำลังรอ"
                         },
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = Color(0xFFD8C9F0),
                     )
                 }
             }
@@ -399,8 +464,6 @@ private fun HomeScreen(
             if (!permissions.exactAlarms) PermissionRow(
                 "เพิ่มความแม่นยำของเวลา", "ไม่เปิดก็ใช้ได้ แต่อาจถูกเลื่อนโดย Android", false, onOpenExactAlarmSettings,
             )
-        } else {
-            PermissionRow("สิทธิ์พร้อมแล้ว", "ระบบกำลังรับการแจ้งเตือนจากแอปที่คุณเลือก", true, {})
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -410,14 +473,46 @@ private fun HomeScreen(
         }
         val active = pending.filter { !it.demo && it.nextAtMillis > 0L }
         if (active.isEmpty()) {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("ยังไม่มีรายการที่ต้องเตือนซ้ำ", fontWeight = FontWeight.SemiBold)
-                        Text("เมื่อมีแจ้งเตือนใหม่จากแอปที่เปิดไว้ รายการจะปรากฏตรงนี้", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Surface(
+                modifier = Modifier.fillMaxWidth().background(
+                    Brush.linearGradient(listOf(Color(0xFF282631), Color(0xFF1B1920))),
+                    MaterialTheme.shapes.extraLarge,
+                ),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = Color.Transparent,
+            ) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            modifier = Modifier.size(42.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("ยังไม่มีรายการที่ต้องเตือนซ้ำ", fontWeight = FontWeight.Bold)
+                            Text("พร้อมรับ loop ใหม่จากแอปที่คุณเลือก", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+                        repeat(12) { index ->
+                            Surface(
+                                modifier = Modifier.weight(1f).height(if (index % 3 == 0) 24.dp else 12.dp),
+                                shape = MaterialTheme.shapes.small,
+                                color = if (index < 4) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
+                            ) {}
+                        }
+                    }
+                    LinearProgressIndicator(
+                        progress = { 0f },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.secondary,
+                        trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+                    )
                 }
             }
         } else {
@@ -427,6 +522,105 @@ private fun HomeScreen(
         }
 
         Text("ข้อมูลการแจ้งเตือนอยู่ในเครื่องนี้ และ LumaLoop จะไม่ลบข้อความต้นทาง", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun ProfileScreen(
+    name: String,
+    imageUri: String,
+    settings: ReminderSettings,
+    enabledRules: Int,
+    onSaveSettings: (ReminderSettings) -> Unit,
+    onOpenGuide: () -> Unit,
+    onPickImage: () -> Unit,
+) {
+    var draftName by remember(name) { mutableStateOf(name) }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text("โปรไฟล์", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("ปรับ LumaLoop ให้เข้ากับจังหวะชีวิตของคุณ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Surface(
+            modifier = Modifier.fillMaxWidth().background(
+                Brush.linearGradient(listOf(Color(0xFF3B2A68), Color(0xFF241A3A))),
+                MaterialTheme.shapes.extraLarge,
+            ),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = Color.Transparent,
+        ) {
+            Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                ProfileAvatar(name, imageUri, 58.dp)
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text("Good morning,", color = Color(0xFFD8C9F0))
+                    Text(name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color(0xFFF2EAFE))
+                    Text("$enabledRules กฎที่เปิดใช้งาน", color = Color(0xFFD8C9F0))
+                }
+            }
+        }
+        OutlinedButton(onClick = onPickImage, modifier = Modifier.fillMaxWidth()) {
+            Text(if (imageUri.isBlank()) "เลือกรูปโปรไฟล์" else "เปลี่ยนรูปโปรไฟล์")
+        }
+        SectionTitle("ชื่อที่ใช้ในหน้าแรก")
+        OutlinedTextField(
+            value = draftName,
+            onValueChange = { draftName = it.take(32) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("ชื่อของคุณ") },
+            leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
+            trailingIcon = {
+                TextButton(
+                    onClick = { onSaveSettings(settings.copy(profileName = draftName.trim().ifBlank { "Nok" })) },
+                    enabled = draftName.trim().isNotBlank(),
+                ) { Text("บันทึก") }
+            },
+        )
+        SectionTitle("การแจ้งเตือน")
+        SettingToggle("ซ่อนตัวอย่างข้อความ", "แสดงเฉพาะชื่อแอปและผู้ส่งในเตือนซ้ำ", !settings.showPreview, Icons.Outlined.VisibilityOff) {
+            onSaveSettings(settings.copy(showPreview = !it))
+        }
+        SettingToggle("มีเสียงเตือน", "เปิดหรือปิดเสียงรวมของ LumaLoop", settings.soundEnabled, Icons.AutoMirrored.Outlined.VolumeUp) {
+            onSaveSettings(settings.copy(soundEnabled = it))
+        }
+        SettingToggle("ช่วงงดเตือน", "เลื่อนการเตือนไปหลังช่วงเวลาที่กำหนด", settings.quietHoursEnabled, Icons.Outlined.Bedtime) {
+            onSaveSettings(settings.copy(quietHoursEnabled = it))
+        }
+        if (settings.quietHoursEnabled) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TimeButton("เริ่ม", settings.quietStartMinute) { onSaveSettings(settings.copy(quietStartMinute = it)) }
+                TimeButton("สิ้นสุด", settings.quietEndMinute) { onSaveSettings(settings.copy(quietEndMinute = it)) }
+            }
+        }
+
+        OutlinedButton(onClick = onOpenGuide, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.AutoMirrored.Outlined.HelpOutline, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("คู่มือและตรวจสอบสิทธิ์")
+        }
+    }
+}
+
+@Composable
+private fun ProfileAvatar(name: String, imageUri: String, size: androidx.compose.ui.unit.Dp) {
+    val context = LocalContext.current
+    val bitmap = remember(imageUri) {
+        imageUri.takeIf(String::isNotBlank)?.let { uri ->
+            runCatching {
+                context.contentResolver.openInputStream(Uri.parse(uri))?.use(BitmapFactory::decodeStream)
+            }.getOrNull()
+        }
+    }
+    Surface(modifier = Modifier.size(size), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
+        if (bitmap != null) {
+            Image(bitmap.asImageBitmap(), contentDescription = "รูปโปรไฟล์ของ $name", contentScale = ContentScale.Crop)
+        } else {
+            Box(contentAlignment = Alignment.Center) {
+                Text(name.firstOrNull()?.uppercase() ?: "L", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 
@@ -807,6 +1001,7 @@ private fun RuleEditorDialog(
     var limit by remember(app.packageName, initialRule) { mutableStateOf(initialRule.maxRepeats?.toString() ?: "3") }
     var unlimited by remember(app.packageName, initialRule) { mutableStateOf(initialRule.maxRepeats == null) }
     var exact by remember(app.packageName, initialRule) { mutableStateOf(initialRule.exactSenderMatch) }
+    var soundPreset by remember(app.packageName, initialRule) { mutableStateOf(initialRule.soundPreset) }
     var error by remember { mutableStateOf<String?>(null) }
     val matchingSuggestions = senderSuggestions
         .filter { senderQuery.isBlank() || it.contains(senderQuery.trim(), ignoreCase = true) }
@@ -927,6 +1122,21 @@ private fun RuleEditorDialog(
                     Checkbox(checked = exact, onCheckedChange = { exact = it })
                     Text(if (exact) "ตรงกับชื่อทั้งหมด" else "มีชื่อที่เลือกอยู่ในหัวข้อก็พอ")
                 }
+                Text("เสียงสำหรับแอปนี้", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    "เลือกเสียงต่างกันได้ เช่น Instagram ใช้เสียงเร่งด่วน ส่วนแอปอื่นใช้เสียงนุ่ม",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("default" to "มาตรฐาน", "soft" to "นุ่ม", "urgent" to "เร่งด่วน").forEach { (value, label) ->
+                        InputChip(
+                            selected = soundPreset == value,
+                            onClick = { soundPreset = value },
+                            label = { Text(label) },
+                        )
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = interval,
@@ -969,6 +1179,7 @@ private fun RuleEditorDialog(
                         .map(String::trim)
                         .filter(String::isNotEmpty)
                         .distinctBy(String::lowercase),
+                    soundPreset = soundPreset,
                     exactSenderMatch = exact,
                     quietHoursBypassSenders = quietBypassSenders
                         .map(String::trim)

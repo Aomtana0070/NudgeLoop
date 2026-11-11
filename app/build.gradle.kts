@@ -29,8 +29,8 @@ android {
         applicationId = "app.renotify"
         minSdk = 26
         targetSdk = 36
-        versionCode = 16
-        versionName = "1.1.13"
+        versionCode = 17
+        versionName = "1.1.14"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

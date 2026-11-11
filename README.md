@@ -20,6 +20,7 @@ NudgeLoop repeats reminders for notifications that are still waiting in Android'
 - **Error prevention:** safe default of 5 minutes and 3 repeats; unlimited reminders are opt-in and stop when the source notification is removed or the user taps stop; exact alarm access is requested explicitly; sender matching uses the notification title exposed by the source app.
 - **Recovery:** when access is missing, show the blocked capability and a settings action; when access is revoked, stop scheduling and show the status.
 - **Quiet hours:** optional quiet hours defer repeat alerts until the configured end time; individual sender filters can be marked as important to bypass quiet hours.
+- **Profile and sound:** the home greeting uses the saved profile name; each app rule can choose a standard, soft, or urgent reminder sound through its own Android notification channel.
 - **Evidence plan:** emulator walkthrough for setup, app toggle, sender match, repeat interval, stop behavior, and notification permission denial.
 
 ## Platform behavior to know

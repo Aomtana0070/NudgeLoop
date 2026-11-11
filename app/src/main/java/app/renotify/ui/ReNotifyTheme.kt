@@ -1,17 +1,13 @@
 package app.renotify.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 
 @Composable
 fun ReNotifyTheme(content: @Composable () -> Unit) {
-    val darkTheme = isSystemInDarkTheme()
-    val colors = if (darkTheme) {
-        darkColorScheme(
+    val colors = darkColorScheme(
             primary = Color(0xFFA88CFF),
             onPrimary = Color(0xFF21143D),
             primaryContainer = Color(0xFF382A5B),
@@ -28,22 +24,7 @@ fun ReNotifyTheme(content: @Composable () -> Unit) {
             surfaceVariant = Color(0xFF29272F),
             onSurfaceVariant = Color(0xFFC9C0CE),
             outline = Color(0xFF77717D),
-        )
-    } else {
-        lightColorScheme(
-            primary = Color(0xFF6D4BC1),
-            onPrimary = Color.White,
-            primaryContainer = Color(0xFFE9DDFF),
-            onPrimaryContainer = Color(0xFF26134E),
-            secondary = Color(0xFF526600),
-            onSecondary = Color.White,
-            secondaryContainer = Color(0xFFE5F5A8),
-            onSecondaryContainer = Color(0xFF182000),
-            tertiary = Color(0xFF8A4F3A),
-            surfaceVariant = Color(0xFFEDE7F0),
-            onSurfaceVariant = Color(0xFF5F5964),
-        )
-    }
+    )
     MaterialTheme(
         colorScheme = colors,
         content = content,

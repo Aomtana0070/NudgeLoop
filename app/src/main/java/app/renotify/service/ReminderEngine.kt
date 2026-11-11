@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -41,8 +42,8 @@ object ReminderEngine {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
         val manager = context.getSystemService(NotificationManager::class.java)
-        return listOf(CHANNEL_SOUND, CHANNEL_SILENT).any { channelId ->
-            manager.getNotificationChannel(channelId)?.importance != NotificationManager.IMPORTANCE_NONE
+        return manager.notificationChannels.any { channel ->
+            channel.id.startsWith("repeat_") && channel.importance != NotificationManager.IMPORTANCE_NONE
         }
     }
 
@@ -205,6 +206,7 @@ object ReminderEngine {
 
     fun applyRule(context: Context, rule: AppRule) {
         RuleStore.saveRule(context, rule)
+        createChannels(context)
         val existing = RuleStore.config.value.pending.filter { it.packageName == rule.packageName && !it.demo }
         if (!rule.enabled) {
             existing.forEach { cancel(context, it.key) }
@@ -365,8 +367,10 @@ object ReminderEngine {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         }
-        val preferredChannel = if (settings.soundEnabled) CHANNEL_SOUND else CHANNEL_SILENT
-        val fallbackChannel = if (settings.soundEnabled) CHANNEL_SILENT else CHANNEL_SOUND
+        val rule = RuleStore.config.value.rules[reminder.packageName]
+        val preset = rule?.soundPreset ?: "default"
+        val preferredChannel = if (settings.soundEnabled) soundChannelId(reminder.packageName, preset) else CHANNEL_SILENT
+        val fallbackChannel = if (settings.soundEnabled) CHANNEL_SILENT else soundChannelId(reminder.packageName, preset)
         val channel = if (isChannelEnabled(context, preferredChannel)) preferredChannel else fallbackChannel
         val notification = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notification)
@@ -412,7 +416,36 @@ object ReminderEngine {
             setSound(null, null)
             enableVibration(false)
         })
+        RuleStore.config.value.rules.values.forEach { rule ->
+            val channelId = soundChannelId(rule.packageName, rule.soundPreset)
+            manager.createNotificationChannel(NotificationChannel(channelId, "เตือน ${rule.packageName} · ${soundPresetLabel(rule.soundPreset)}", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "เสียงเตือนซ้ำสำหรับแอปนี้"
+                setSound(soundUri(rule.soundPreset), soundAttributes())
+                enableVibration(true)
+            })
+        }
     }
+
+    private fun soundChannelId(packageName: String, preset: String): String =
+        "repeat_${stableId(packageName)}_$preset"
+
+    private fun soundPresetLabel(preset: String): String = when (preset) {
+        "soft" -> "นุ่ม"
+        "urgent" -> "เร่งด่วน"
+        else -> "มาตรฐาน"
+    }
+
+    private fun soundUri(preset: String): Uri = when (preset) {
+        "soft" -> Settings.System.DEFAULT_RINGTONE_URI
+        "urgent" -> Settings.System.DEFAULT_ALARM_ALERT_URI
+        else -> Settings.System.DEFAULT_NOTIFICATION_URI
+    }
+
+    private fun soundAttributes(): android.media.AudioAttributes =
+        android.media.AudioAttributes.Builder()
+            .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
 
     private fun quietUntil(context: Context, settings: ReminderSettings, now: Long): Long? {
         if (!settings.quietHoursEnabled || settings.quietStartMinute == settings.quietEndMinute) return null

@@ -20,6 +20,10 @@ class MainActivity : ComponentActivity() {
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         viewModel.refresh()
     }
+    private val profileImagePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri ?: return@registerForActivityResult
+        viewModel.saveSettings(viewModel.state.value.config.settings.copy(profileImageUri = uri.toString()))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +40,7 @@ class MainActivity : ComponentActivity() {
                     onOpenAppNotificationSettings = ::openAppNotificationSettings,
                     onOpenExactAlarmSettings = ::openExactAlarmSettings,
                     onOpenBackgroundSettings = ::openBackgroundSettings,
+                    onPickProfileImage = { profileImagePicker.launch("image/*") },
                 )
             }
         }

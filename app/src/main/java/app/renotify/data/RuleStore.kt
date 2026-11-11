@@ -269,6 +269,7 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
                 put("senderFilters", JSONArray(rule.senderFilters))
                 put("exactSenderMatch", rule.exactSenderMatch)
                 put("quietHoursBypassSenders", JSONArray(rule.quietHoursBypassSenders))
+                put("soundPreset", rule.soundPreset)
             })
         }
     }
@@ -286,6 +287,7 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
                     ?: item.optString("senderFilter").takeIf(String::isNotBlank)?.let(::listOf).orEmpty(),
                 exactSenderMatch = item.optBoolean("exactSenderMatch", true),
                 quietHoursBypassSenders = item.optJSONArray("quietHoursBypassSenders")?.toStringList().orEmpty(),
+                soundPreset = item.optString("soundPreset", "default").takeIf { it in setOf("default", "soft", "urgent") } ?: "default",
             ))
         }
     }
@@ -327,6 +329,8 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
     }
 
     private fun ReminderSettings.toJson() = JSONObject().apply {
+        put("profileName", profileName)
+        put("profileImageUri", profileImageUri)
         put("showPreview", showPreview)
         put("soundEnabled", soundEnabled)
         put("quietHoursEnabled", quietHoursEnabled)
@@ -366,6 +370,8 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
     }
 
     private fun JSONObject.toSettings() = ReminderSettings(
+        profileName = optString("profileName", "Nok").trim().take(32).ifBlank { "Nok" },
+        profileImageUri = optString("profileImageUri").take(2048),
         showPreview = optBoolean("showPreview", false),
         soundEnabled = optBoolean("soundEnabled", true),
         quietHoursEnabled = optBoolean("quietHoursEnabled", false),
