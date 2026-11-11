@@ -111,6 +111,33 @@ private enum class Destination(val label: String, val icon: ImageVector) {
 }
 
 @Composable
+private fun LumaBrandMark(modifier: Modifier = Modifier) {
+    Box(modifier.size(width = 28.dp, height = 25.dp), contentAlignment = Alignment.BottomCenter) {
+        Surface(
+            modifier = Modifier.size(width = 26.dp, height = 14.dp).offset(y = (-5).dp),
+            shape = CircleShape,
+            color = androidx.compose.ui.graphics.Color.Transparent,
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+        ) {}
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            listOf(
+                10.dp to MaterialTheme.colorScheme.secondary,
+                18.dp to MaterialTheme.colorScheme.primary,
+                14.dp to MaterialTheme.colorScheme.tertiary,
+            ).forEach { (height, color) ->
+                Box(Modifier.width(4.dp).height(height).clip(MaterialTheme.shapes.small).then(Modifier), contentAlignment = Alignment.Center) {
+                    Surface(Modifier.fillMaxSize(), color = color, shape = MaterialTheme.shapes.small) {}
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun FloatingNotchBar(selected: Destination, onSelect: (Destination) -> Unit) {
     val selectedPosition by animateFloatAsState(
         targetValue = (Destination.entries.indexOf(selected) + 0.5f) / Destination.entries.size,
@@ -208,7 +235,13 @@ fun ReNotifyApp(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.app_name), fontWeight = FontWeight.SemiBold) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LumaBrandMark()
+                        Spacer(Modifier.width(10.dp))
+                        Text(stringResource(R.string.app_name), fontWeight = FontWeight.SemiBold)
+                    }
+                },
                 actions = {
                     IconButton(onClick = { destination = Destination.Guide }) {
                         Icon(Icons.Outlined.Settings, contentDescription = "การตั้งค่าและคู่มือ")
@@ -308,16 +341,40 @@ private fun HomeScreen(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        Text("ไม่พลาดข้อความ\nที่สำคัญกับคุณ", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-        Text("เตือนซ้ำเฉพาะแอปที่คุณเลือก จนกว่าคุณจะจัดการการแจ้งเตือนนั้น", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Good morning,", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Nok", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+            }
+            Surface(
+                modifier = Modifier.size(44.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("N", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+        Text("โฟกัสกับสิ่งสำคัญ\nส่วน LumaLoop จะคอยเตือนให้", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            shape = MaterialTheme.shapes.extraLarge,
+        ) {
             Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.NotificationsActive, contentDescription = null, modifier = Modifier.size(34.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(if (permissions.notificationAccess && permissions.notificationListenerConnected && permissions.postNotifications && permissions.appNotificationsEnabled && permissions.exactAlarms) "พร้อมเตือนซ้ำ" else "ตรวจสอบการเชื่อมต่อ", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Text("$enabledRules แอปที่เปิดอยู่ · ${pending.count { !it.demo }} รายการกำลังรอ", color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Text(if (permissions.notificationAccess && permissions.notificationListenerConnected && permissions.postNotifications && permissions.appNotificationsEnabled && permissions.exactAlarms) "Luma is online" else "Finish your setup", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (permissions.notificationAccess && !permissions.notificationListenerConnected) {
+                            "ได้รับสิทธิ์แล้ว แต่กำลังรอ Android เชื่อมต่อบริการ"
+                        } else {
+                            "$enabledRules แอปที่เปิดอยู่ · ${pending.count { !it.demo }} รายการกำลังรอ"
+                        },
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
                 }
             }
         }
@@ -329,15 +386,15 @@ private fun HomeScreen(
             )
             if (permissions.notificationAccess && !permissions.notificationListenerConnected) PermissionRow(
                 "บริการอ่านแจ้งเตือนยังไม่เชื่อมต่อ",
-                "กำลังลองเชื่อมต่อใหม่อัตโนมัติ หากยังไม่กลับมาเชื่อม ให้แตะเพื่อตรวจสิทธิ์",
+                "ได้รับสิทธิ์แล้ว · กำลังลองเชื่อมต่อใหม่อัตโนมัติ แตะเพื่อเปิดหน้าตั้งค่าและตรวจสอบ LumaLoop",
                 false,
                 onOpenNotificationAccess,
             )
             if (!permissions.postNotifications) PermissionRow(
-                "ส่งการแจ้งเตือนซ้ำ", "ต้องอนุญาตให้ NudgeLoop แสดงการเตือน", false, onRequestNotificationPermission,
+                "ส่งการแจ้งเตือนซ้ำ", "ต้องอนุญาตให้ LumaLoop แสดงการเตือน", false, onRequestNotificationPermission,
             )
             if (permissions.postNotifications && !permissions.appNotificationsEnabled) PermissionRow(
-                "เปิดการแจ้งเตือนของ NudgeLoop", "ตรวจสอบว่าไม่ได้ปิดการแจ้งเตือนหรือช่องเตือนซ้ำใน Android", false, onOpenAppNotificationSettings,
+                "เปิดการแจ้งเตือนของ LumaLoop", "ตรวจสอบว่าไม่ได้ปิดการแจ้งเตือนหรือช่องเตือนซ้ำใน Android", false, onOpenAppNotificationSettings,
             )
             if (!permissions.exactAlarms) PermissionRow(
                 "เพิ่มความแม่นยำของเวลา", "ไม่เปิดก็ใช้ได้ แต่อาจถูกเลื่อนโดย Android", false, onOpenExactAlarmSettings,
@@ -369,7 +426,7 @@ private fun HomeScreen(
             }
         }
 
-        Text("ข้อมูลการแจ้งเตือนอยู่ในเครื่องนี้ และ NudgeLoop จะไม่ลบข้อความต้นทาง", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("ข้อมูลการแจ้งเตือนอยู่ในเครื่องนี้ และ LumaLoop จะไม่ลบข้อความต้นทาง", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -500,7 +557,7 @@ private fun GuideScreen(
     val context = LocalContext.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("คู่มือและการตั้งค่า", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("ตั้งค่าครั้งเดียว แล้ว NudgeLoop จะคอยเตือนให้คุณกลับไปดูข้อความที่ยังค้างอยู่", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("ตั้งค่าครั้งเดียว แล้ว LumaLoop จะคอยเตือนให้คุณกลับไปดูข้อความที่ยังค้างอยู่", color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         SectionTitle("ตรวจสอบการทำงาน")
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
@@ -508,8 +565,20 @@ private fun GuideScreen(
                 Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                DiagnosticsRow("สิทธิ์อ่านแจ้งเตือน", if (permissions.notificationAccess) "อนุญาต" else "ยังไม่อนุญาต", permissions.notificationAccess)
-                DiagnosticsRow("บริการ listener", if (permissions.notificationListenerConnected) "เชื่อมต่ออยู่" else "ไม่ได้เชื่อมต่อ", permissions.notificationListenerConnected)
+                DiagnosticsRow(
+                    "สิทธิ์อ่านแจ้งเตือน",
+                    if (permissions.notificationAccess) "อนุญาตแล้ว" else "ยังไม่อนุญาต",
+                    permissions.notificationAccess,
+                )
+                DiagnosticsRow(
+                    "การเชื่อมต่อ listener",
+                    when {
+                        permissions.notificationListenerConnected -> "เชื่อมต่ออยู่"
+                        permissions.notificationAccess -> "ได้รับสิทธิ์แล้ว · รอ Android เชื่อมต่อ"
+                        else -> "ต้องอนุญาตก่อน"
+                    },
+                    permissions.notificationListenerConnected,
+                )
                 DiagnosticsRow(
                     "บริการพยุงเบื้องหลัง",
                     if (permissions.listenerKeepAliveRunning) {
@@ -612,7 +681,7 @@ private fun GuideScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedButton(onClick = onScanNotifications) {
-                    Text("สแกนแจ้งเตือนที่ยังค้าง")
+                    Text("ตรวจสอบและเชื่อมต่อใหม่")
                 }
                 OutlinedButton(onClick = onOpenNotificationAccess) {
                     Text("เปิดการตั้งค่า Notification access")
@@ -621,12 +690,22 @@ private fun GuideScreen(
         }
 
         SectionTitle("เริ่มต้นใช้งาน")
-        NumberedStep("1", "อนุญาตให้ NudgeLoop อ่านการแจ้งเตือน", "ใช้ชื่อแอปและชื่อผู้ส่งเพื่อเลือกกฎ และตรวจเมื่อการแจ้งเตือนต้นทางถูกปิด", permissions.notificationAccess && permissions.notificationListenerConnected, onOpenNotificationAccess)
-        NumberedStep("2", "อนุญาตการแจ้งเตือนของ NudgeLoop", "จำเป็นสำหรับการส่งการเตือนซ้ำบน Android 13 ขึ้นไป", permissions.postNotifications, onRequestNotificationPermission)
-        NumberedStep("3", "เปิดช่องทางแจ้งเตือนของ NudgeLoop", "ถ้าปิดแอปหรือช่องเตือนซ้ำไว้ Android จะไม่แสดงการเตือน", permissions.appNotificationsEnabled, onOpenAppNotificationSettings)
+        NumberedStep("1", "อนุญาตให้ LumaLoop อ่านการแจ้งเตือน", "ใช้ชื่อแอปและชื่อผู้ส่งเพื่อเลือกกฎ และตรวจเมื่อการแจ้งเตือนต้นทางถูกปิด", permissions.notificationAccess, onOpenNotificationAccess)
+        if (permissions.notificationAccess && !permissions.notificationListenerConnected) {
+            InfoRow(
+                Icons.Outlined.NotificationsOff,
+                "กำลังเชื่อมต่อบริการอ่านแจ้งเตือน",
+                "สิทธิ์เปิดอยู่แล้ว แต่ Android ยังไม่ bind listener สำเร็จ แอปจะลองเชื่อมต่อใหม่อัตโนมัติ",
+            )
+            OutlinedButton(onClick = onScanNotifications) {
+                Text("ลองเชื่อมต่อ listener อีกครั้ง")
+            }
+        }
+        NumberedStep("2", "อนุญาตการแจ้งเตือนของ LumaLoop", "จำเป็นสำหรับการส่งการเตือนซ้ำบน Android 13 ขึ้นไป", permissions.postNotifications, onRequestNotificationPermission)
+        NumberedStep("3", "เปิดช่องทางแจ้งเตือนของ LumaLoop", "ถ้าปิดแอปหรือช่องเตือนซ้ำไว้ Android จะไม่แสดงการเตือน", permissions.appNotificationsEnabled, onOpenAppNotificationSettings)
         NumberedStep("4", "อนุญาตนาฬิกาปลุกที่แม่นยำ", "ถ้าไม่อนุญาต Android 12 ขึ้นไปอาจเลื่อนเวลาได้ถึงประมาณ 1 ชั่วโมง", permissions.exactAlarms, onOpenExactAlarmSettings)
-        InfoRow(Icons.Outlined.Bedtime, "พยุง listener เมื่อปิดแอป", "เมื่ออนุญาตอ่านแจ้งเตือนและการแจ้งเตือนของ NudgeLoop แอปจะเปิดบริการเบื้องหน้าพร้อมแจ้งเตือนถาวรเพื่อช่วยคง process และลองเชื่อม listener ใหม่")
-        Text("Redmi/Xiaomi: เปิดข้อมูลแอป NudgeLoop > ประหยัดแบตเตอรี่ > ไม่มีข้อจำกัด และเปิดเริ่มการทำงานอัตโนมัติ/Background autostart หากมี", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        InfoRow(Icons.Outlined.Bedtime, "พยุง listener เมื่อปิดแอป", "เมื่ออนุญาตอ่านแจ้งเตือนและการแจ้งเตือนของ LumaLoop แอปจะเปิดบริการเบื้องหน้าพร้อมแจ้งเตือนถาวรเพื่อช่วยคง process และลองเชื่อม listener ใหม่")
+        Text("Redmi/Xiaomi: เปิดข้อมูลแอป LumaLoop > ประหยัดแบตเตอรี่ > ไม่มีข้อจำกัด และเปิดเริ่มการทำงานอัตโนมัติ/Background autostart หากมี", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedButton(onClick = onOpenBackgroundSettings) { Text("ตั้งค่าแบตเตอรี่และการทำงานเบื้องหลัง") }
         Text("แตะชื่อขั้นตอนเพื่อเปิดหน้าตั้งค่าที่เกี่ยวข้อง", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
@@ -645,6 +724,11 @@ private fun GuideScreen(
                 TimeButton("เริ่ม", settings.quietStartMinute) { onSaveSettings(settings.copy(quietStartMinute = it)) }
                 TimeButton("สิ้นสุด", settings.quietEndMinute) { onSaveSettings(settings.copy(quietEndMinute = it)) }
             }
+            Text(
+                "ผู้ส่งที่ตั้งเป็นคนสำคัญในกฎของแอป จะข้ามช่วงงดเตือนได้",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         SectionTitle("ทดสอบการแจ้งเตือน")
@@ -712,6 +796,11 @@ private fun RuleEditorDialog(
 ) {
     var enabled by remember(app.packageName, initialRule) { mutableStateOf(initialRule.enabled) }
     var senders by remember(app.packageName, initialRule) { mutableStateOf(initialRule.senderFilters) }
+    var quietBypassSenders by remember(app.packageName, initialRule) {
+        mutableStateOf(initialRule.quietHoursBypassSenders.filter { bypass ->
+            initialRule.senderFilters.any { it.equals(bypass, ignoreCase = true) }
+        })
+    }
     var senderQuery by remember(app.packageName, initialRule) { mutableStateOf("") }
     var suggestionsExpanded by remember(app.packageName) { mutableStateOf(false) }
     var interval by remember(app.packageName, initialRule) { mutableStateOf(initialRule.intervalMinutes.toString()) }
@@ -754,7 +843,10 @@ private fun RuleEditorDialog(
                         senders.forEach { name ->
                             InputChip(
                                 selected = true,
-                                onClick = { senders = senders.filterNot { it == name } },
+                                onClick = {
+                                    senders = senders.filterNot { it == name }
+                                    quietBypassSenders = quietBypassSenders.filterNot { it == name }
+                                },
                                 label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                 trailingIcon = { Icon(Icons.Outlined.Close, contentDescription = "เอา $name ออก") },
                             )
@@ -807,6 +899,30 @@ private fun RuleEditorDialog(
                     }
                 }
                 Text("ค้นหาได้จากทุกส่วนของชื่อหัวข้อแจ้งเตือน คำแนะนำเก็บไว้ในเครื่องและแสดงล่าสุดสูงสุด 6 รายชื่อ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (senders.isNotEmpty()) {
+                    Text("ข้ามโหมดพระจันทร์สำหรับผู้ส่งสำคัญ", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        "คนที่เลือกจะได้รับการเตือนซ้ำแม้อยู่ในช่วงงดเตือน",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        senders.forEach { name ->
+                            val bypassesQuietHours = quietBypassSenders.any { it.equals(name, ignoreCase = true) }
+                            InputChip(
+                                selected = bypassesQuietHours,
+                                onClick = {
+                                    quietBypassSenders = if (bypassesQuietHours) {
+                                        quietBypassSenders.filterNot { it.equals(name, ignoreCase = true) }
+                                    } else {
+                                        quietBypassSenders + name
+                                    }
+                                },
+                                label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            )
+                        }
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = exact, onCheckedChange = { exact = it })
                     Text(if (exact) "ตรงกับชื่อทั้งหมด" else "มีชื่อที่เลือกอยู่ในหัวข้อก็พอ")
@@ -854,6 +970,10 @@ private fun RuleEditorDialog(
                         .filter(String::isNotEmpty)
                         .distinctBy(String::lowercase),
                     exactSenderMatch = exact,
+                    quietHoursBypassSenders = quietBypassSenders
+                        .map(String::trim)
+                        .filter { bypass -> senders.any { it.equals(bypass, ignoreCase = true) } }
+                        .distinctBy(String::lowercase),
                     intervalMinutes = minutes,
                     maxRepeats = if (unlimited) null else repeats,
                 ))

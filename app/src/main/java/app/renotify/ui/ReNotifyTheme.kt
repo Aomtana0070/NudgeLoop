@@ -1,24 +1,48 @@
 package app.renotify.ui
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun ReNotifyTheme(content: @Composable () -> Unit) {
     val darkTheme = isSystemInDarkTheme()
-    val context = LocalContext.current
-    val colors = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && darkTheme -> dynamicDarkColorScheme(context)
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(context)
-        darkTheme -> darkColorScheme()
-        else -> lightColorScheme()
+    val colors = if (darkTheme) {
+        darkColorScheme(
+            primary = Color(0xFFA88CFF),
+            onPrimary = Color(0xFF21143D),
+            primaryContainer = Color(0xFF382A5B),
+            onPrimaryContainer = Color(0xFFE9DDFF),
+            secondary = Color(0xFFD9FF72),
+            onSecondary = Color(0xFF202900),
+            secondaryContainer = Color(0xFF2D3815),
+            onSecondaryContainer = Color(0xFFE6FFAA),
+            tertiary = Color(0xFFE9B29D),
+            background = Color(0xFF111014),
+            onBackground = Color(0xFFE9E1EC),
+            surface = Color(0xFF111014),
+            onSurface = Color(0xFFE9E1EC),
+            surfaceVariant = Color(0xFF29272F),
+            onSurfaceVariant = Color(0xFFC9C0CE),
+            outline = Color(0xFF77717D),
+        )
+    } else {
+        lightColorScheme(
+            primary = Color(0xFF6D4BC1),
+            onPrimary = Color.White,
+            primaryContainer = Color(0xFFE9DDFF),
+            onPrimaryContainer = Color(0xFF26134E),
+            secondary = Color(0xFF526600),
+            onSecondary = Color.White,
+            secondaryContainer = Color(0xFFE5F5A8),
+            onSecondaryContainer = Color(0xFF182000),
+            tertiary = Color(0xFF8A4F3A),
+            surfaceVariant = Color(0xFFEDE7F0),
+            onSurfaceVariant = Color(0xFF5F5964),
+        )
     }
     MaterialTheme(
         colorScheme = colors,

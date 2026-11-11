@@ -268,6 +268,7 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
                 put("maxRepeats", rule.maxRepeats ?: JSONObject.NULL)
                 put("senderFilters", JSONArray(rule.senderFilters))
                 put("exactSenderMatch", rule.exactSenderMatch)
+                put("quietHoursBypassSenders", JSONArray(rule.quietHoursBypassSenders))
             })
         }
     }
@@ -284,6 +285,7 @@ object RuleStore : SharedPreferences.OnSharedPreferenceChangeListener {
                 senderFilters = item.optJSONArray("senderFilters")?.toStringList()
                     ?: item.optString("senderFilter").takeIf(String::isNotBlank)?.let(::listOf).orEmpty(),
                 exactSenderMatch = item.optBoolean("exactSenderMatch", true),
+                quietHoursBypassSenders = item.optJSONArray("quietHoursBypassSenders")?.toStringList().orEmpty(),
             ))
         }
     }

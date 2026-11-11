@@ -12,4 +12,15 @@ object RuleMatcher {
             }
         }
     }
+
+    fun bypassesQuietHours(rule: AppRule, notificationTitle: String): Boolean {
+        val bypassSenders = rule.quietHoursBypassSenders.map(String::trim).filter(String::isNotEmpty)
+        return bypassSenders.any { sender ->
+            if (rule.exactSenderMatch) {
+                notificationTitle.trim().equals(sender, ignoreCase = true)
+            } else {
+                notificationTitle.contains(sender, ignoreCase = true)
+            }
+        }
+    }
 }

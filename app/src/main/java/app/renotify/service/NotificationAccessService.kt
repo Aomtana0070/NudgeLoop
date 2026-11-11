@@ -18,6 +18,7 @@ class NotificationAccessService : NotificationListenerService() {
         instance = WeakReference(this)
         mutableConnectionState.value = true
         RuleStore.recordListenerConnected(this, System.currentTimeMillis())
+        ListenerKeepAliveService.startIfAllowed(this)
         ListenerKeepAliveService.onListenerConnectionChanged(true)
         val active = try {
             activeNotifications.orEmpty().toList()
@@ -112,6 +113,7 @@ class NotificationAccessService : NotificationListenerService() {
         mutableConnectionState.value = false
         RuleStore.recordListenerDisconnected(this, System.currentTimeMillis())
         synchronized(activeOriginalKeys) { activeOriginalKeys.clear() }
+        ListenerKeepAliveService.startIfAllowed(this)
         ListenerKeepAliveService.onListenerConnectionChanged(false)
         requestListenerRebind(this, "listener_disconnected")
     }

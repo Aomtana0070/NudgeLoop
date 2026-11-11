@@ -127,7 +127,9 @@ object ReminderEngine {
         }
 
         val now = System.currentTimeMillis()
-        val quietUntil = quietUntil(context, config.settings, now)
+        val rule = config.rules[reminder.packageName]
+        val bypassesQuietHours = rule?.let { RuleMatcher.bypassesQuietHours(it, reminder.sender) } == true
+        val quietUntil = quietUntil(context, config.settings, now).takeUnless { bypassesQuietHours }
         if (quietUntil != null) {
             // Re-verify source is still active before deferring into quiet hours.
             if (!reminder.demo && NotificationAccessService.isOriginalActive(key) == false) {

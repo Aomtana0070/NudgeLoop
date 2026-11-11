@@ -13,6 +13,7 @@ data class AppRule(
     val maxRepeats: Int? = 3,
     val senderFilters: List<String> = emptyList(),
     val exactSenderMatch: Boolean = true,
+    val quietHoursBypassSenders: List<String> = emptyList(),
 )
 
 data class PendingReminder(

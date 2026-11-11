@@ -69,6 +69,29 @@ class RuleMatcherTest {
     }
 
     @Test
+    fun quietHoursBypassOnlyMatchesConfiguredImportantSenders() {
+        val rule = AppRule(
+            "com.instagram.android",
+            senderFilters = listOf("Nok", "Mali"),
+            quietHoursBypassSenders = listOf("Nok"),
+        )
+        assertTrue(RuleMatcher.bypassesQuietHours(rule, "nok"))
+        assertFalse(RuleMatcher.bypassesQuietHours(rule, "Mali"))
+    }
+
+    @Test
+    fun quietHoursBypassUsesPartialMatchingWhenConfigured() {
+        val rule = AppRule(
+            "com.instagram.android",
+            senderFilters = listOf("Nok"),
+            exactSenderMatch = false,
+            quietHoursBypassSenders = listOf("Nok"),
+        )
+        assertTrue(RuleMatcher.bypassesQuietHours(rule, "Nok sent a message"))
+        assertFalse(RuleMatcher.bypassesQuietHours(rule, "Mali sent a message"))
+    }
+
+    @Test
     fun unlimitedRepeatPolicyNeverReachesALimit() {
         assertTrue(ReminderPolicy.shouldRepeat(0, null))
         assertTrue(ReminderPolicy.shouldRepeat(100_000, null))
